@@ -36,7 +36,7 @@ export default function StatsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1a2e",
+    backgroundColor: "#F2F4F7",
   },
   header: {
     paddingHorizontal: 16,
@@ -46,15 +46,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#ffffff",
+    color: "#111827",
   },
   subtitle: {
     fontSize: 14,
-    color: "#888",
+    color: "#64748B",
     marginTop: 2,
   },
   statsCard: {
-    backgroundColor: "#16213e",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 24,
     marginHorizontal: 20,
@@ -63,17 +63,17 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 14,
-    color: "#888",
+    color: "#64748B",
     marginBottom: 8,
   },
   statNumber: {
     fontSize: 48,
     fontWeight: "bold",
-    color: "#4CAF50",
+    color: "#3B82F6",
   },
   statLabel: {
     fontSize: 16,
-    color: "#ffffff",
+    color: "#111827",
     marginTop: 8,
   },
 });

@@ -1,7 +1,7 @@
 import { Text, View, StyleSheet } from "react-native";
 import { useHabits } from "../context/HabitsContext";
 
-const TILE_COLORS = ["#4CAF50", "#8BC34A", "#CDDC39", "#FFC107", "#FF9800"];
+const TILE_COLORS = ["#3B82F6", "#22C55E", "#F59E0B", "#3B82F6", "#22C55E"];
 
 export default function CityScreen() {
   const { habits, completedCount } = useHabits();
@@ -82,7 +82,7 @@ export default function CityScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1a2e",
+    backgroundColor: "#F2F4F7",
   },
   header: {
     paddingHorizontal: 16,
@@ -92,15 +92,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#ffffff",
+    color: "#111827",
   },
   subtitle: {
     fontSize: 14,
-    color: "#888",
+    color: "#64748B",
     marginTop: 2,
   },
   cityContainer: {
-    backgroundColor: "#16213e",
+    backgroundColor: "#FFFFFF",
     marginHorizontal: 20,
     borderRadius: 16,
     padding: 16,
@@ -121,9 +121,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyTile: {
-    backgroundColor: "#0f3460",
+    backgroundColor: "#CBD5E1",
     borderWidth: 1,
-    borderColor: "#1a4a7a",
+    borderColor: "#94A3B8",
     borderStyle: "dashed",
   },
   tileIcon: {
@@ -139,11 +139,11 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#4CAF50",
+    color: "#3B82F6",
   },
   statLabel: {
     fontSize: 12,
-    color: "#888",
+    color: "#64748B",
     marginTop: 2,
   },
   messageContainer: {
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 18,
-    color: "#888",
+    color: "#64748B",
     textAlign: "center",
   },
 });

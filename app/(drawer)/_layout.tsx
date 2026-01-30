@@ -7,11 +7,11 @@ export default function DrawerLayout() {
       <Drawer
         screenOptions={{
           headerShown: true,
-          drawerStyle: { backgroundColor: "#1a1a2e" },
-          headerStyle: { backgroundColor: "#1a1a2e" },
-          headerTintColor: "#ffffff",
-          drawerActiveTintColor: "#4CAF50",
-          drawerInactiveTintColor: "#888",
+          drawerStyle: { backgroundColor: "#F2F4F7" },
+          headerStyle: { backgroundColor: "#F2F4F7" },
+          headerTintColor: "#111827",
+          drawerActiveTintColor: "#3B82F6",
+          drawerInactiveTintColor: "#64748B",
         }}
       >
         <Drawer.Screen

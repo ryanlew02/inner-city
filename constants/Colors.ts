@@ -1,12 +1,24 @@
-const tintColorLight = '#2f95dc';
+// Color Palette
+export const palette = {
+  background: '#F2F4F7',
+  cards: '#FFFFFF',
+  emptyTiles: '#CBD5E1',
+  cityBlue: '#3B82F6',
+  successGreen: '#22C55E',
+  rareHighlight: '#F59E0B',
+  text: '#111827',
+  textSecondary: '#64748B',
+};
+
+const tintColorLight = palette.cityBlue;
 const tintColorDark = '#fff';
 
 export default {
   light: {
-    text: '#000',
-    background: '#fff',
+    text: palette.text,
+    background: palette.background,
     tint: tintColorLight,
-    tabIconDefault: '#ccc',
+    tabIconDefault: palette.textSecondary,
     tabIconSelected: tintColorLight,
   },
   dark: {

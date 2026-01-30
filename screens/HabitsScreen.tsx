@@ -59,7 +59,7 @@ export default function HabitsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1a2e",
+    backgroundColor: "#F2F4F7",
   },
   header: {
     paddingHorizontal: 16,
@@ -69,11 +69,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#ffffff",
+    color: "#111827",
   },
   subtitle: {
     fontSize: 14,
-    color: "#888",
+    color: "#64748B",
     marginTop: 2,
   },
   habitsList: {
@@ -86,26 +86,26 @@ const styles = StyleSheet.create({
   habitItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#16213e",
+    backgroundColor: "#FFFFFF",
     padding: 16,
     borderRadius: 12,
     marginBottom: 10,
   },
   habitCompleted: {
-    backgroundColor: "#1a3a2a",
+    backgroundColor: "#DCFCE7",
   },
   checkbox: {
     width: 28,
     height: 28,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: "#4CAF50",
+    borderColor: "#22C55E",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 14,
   },
   checkboxChecked: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#22C55E",
   },
   checkmark: {
     color: "#fff",
@@ -114,15 +114,15 @@ const styles = StyleSheet.create({
   },
   habitText: {
     fontSize: 16,
-    color: "#ffffff",
+    color: "#111827",
     flex: 1,
   },
   habitTextCompleted: {
-    color: "#888",
+    color: "#64748B",
     textDecorationLine: "line-through",
   },
   completedBanner: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#22C55E",
     padding: 16,
     margin: 20,
     borderRadius: 12,
