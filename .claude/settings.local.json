@@ -9,7 +9,8 @@
       "Bash(powershell -Command \"Test-Path ''C:\\\\Users\\\\ryanl\\\\OneDrive\\\\Desktop\\\\inner-city\\\\node_modules\\\\expo-sqlite''\")",
       "Bash(powershell -Command \"cd ''C:\\\\Users\\\\ryanl\\\\OneDrive\\\\Desktop\\\\inner-city''; npm install expo-sqlite --save\")",
       "Bash(cmd /c \"cd /d C:\\\\Users\\\\ryanl\\\\OneDrive\\\\Desktop\\\\inner-city && npm install expo-sqlite --save\")",
-      "Bash(cmd /c \"if exist C:\\\\Users\\\\ryanl\\\\OneDrive\\\\Desktop\\\\inner-city\\\\node_modules\\\\expo-sqlite echo EXISTS\")"
+      "Bash(cmd /c \"if exist C:\\\\Users\\\\ryanl\\\\OneDrive\\\\Desktop\\\\inner-city\\\\node_modules\\\\expo-sqlite echo EXISTS\")",
+      "Bash(npx tsc:*)"
     ]
   }
 }

@@ -29,6 +29,83 @@ const PRESET_COLORS = [
 
 const SUGGESTED_ICONS = ["💪", "📚", "💧", "🧘", "🏃", "🍎", "😴", "✍️"];
 
+
+type HabitTileProps = {
+  habit: Habit;
+  completed: boolean;
+  currentValue: number;
+  onTap: () => void;
+  onLongPress: () => void;
+};
+
+function HabitTile({ habit, completed, currentValue, onTap, onLongPress }: HabitTileProps) {
+  const isProgressType = habit.target_type !== "check";
+  const progressPercent = isProgressType
+    ? Math.min((currentValue / habit.target_value) * 100, 100)
+    : (completed ? 100 : 0);
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.habitItem,
+        { borderLeftColor: habit.color || "#22C55E" },
+      ]}
+      onPress={onTap}
+      onLongPress={onLongPress}
+      delayLongPress={500}
+      activeOpacity={0.7}
+    >
+      {/* Progress fill background */}
+      <View
+        style={[
+          styles.progressFill,
+          {
+            backgroundColor: habit.color ? `${habit.color}30` : "#22C55E30",
+            width: `${progressPercent}%`,
+          },
+        ]}
+      />
+
+      {/* Completed overlay */}
+      {completed && (
+        <View style={[styles.completedFill, { backgroundColor: habit.color ? `${habit.color}40` : "#22C55E40" }]} />
+      )}
+
+      <View
+        style={[
+          styles.checkbox,
+          { borderColor: habit.color || "#22C55E" },
+          completed && { backgroundColor: habit.color || "#22C55E" },
+        ]}
+      >
+        {completed && <Text style={styles.checkmark}>✓</Text>}
+      </View>
+      <View style={styles.habitInfo}>
+        <View style={styles.habitHeader}>
+          {habit.icon ? <Text style={styles.habitIcon}>{habit.icon}</Text> : null}
+          <Text
+            style={[
+              styles.habitText,
+              completed && styles.habitTextCompleted,
+            ]}
+          >
+            {habit.name}
+          </Text>
+        </View>
+        {habit.target_type !== "check" ? (
+          <Text style={styles.habitProgress}>
+            {currentValue} / {habit.target_value} {habit.target_type === "minutes" ? "min" : "time(s)"}
+          </Text>
+        ) : habit.description ? (
+          <Text style={styles.habitDescription} numberOfLines={1}>
+            {habit.description}
+          </Text>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 type NewHabitForm = {
   name: string;
   description: string;
@@ -56,6 +133,10 @@ export default function HabitsScreen() {
   const [progressModalVisible, setProgressModalVisible] = useState(false);
   const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
   const [progressValue, setProgressValue] = useState("");
+
+  // Options modal state
+  const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+  const [optionsHabit, setOptionsHabit] = useState<Habit | null>(null);
 
   // Swipeable refs for managing open state
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -87,16 +168,31 @@ export default function HabitsScreen() {
     setProgressValue("");
   };
 
-  const handleDeleteHabit = (habit: { id: string; name: string }) => {
+  const handleOpenOptions = (habit: Habit) => {
+    setOptionsHabit(habit);
+    setOptionsModalVisible(true);
+  };
+
+  const handleCloseOptions = () => {
+    setOptionsModalVisible(false);
+    setOptionsHabit(null);
+  };
+
+  const handleDeleteHabit = () => {
+    if (!optionsHabit) return;
+
     Alert.alert(
       "Delete Habit",
-      `Are you sure you want to delete "${habit.name}"?`,
+      `Are you sure you want to delete "${optionsHabit.name}"? This action cannot be undone.`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => archiveHabit(habit.id),
+          onPress: () => {
+            archiveHabit(optionsHabit.id);
+            handleCloseOptions();
+          },
         },
       ]
     );
@@ -119,20 +215,12 @@ export default function HabitsScreen() {
 
   const renderRightActions = (habit: Habit) => {
     return (
-      <View style={styles.swipeActionsContainer}>
-        <TouchableOpacity
-          style={styles.resetAction}
-          onPress={() => handleResetHabit(habit)}
-        >
-          <Text style={styles.resetActionText}>Reset</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.deleteAction}
-          onPress={() => handleDeleteHabit(habit)}
-        >
-          <Text style={styles.deleteActionText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={styles.resetAction}
+        onPress={() => handleResetHabit(habit)}
+      >
+        <Text style={styles.resetActionText}>Reset</Text>
+      </TouchableOpacity>
     );
   };
 
@@ -143,46 +231,58 @@ export default function HabitsScreen() {
     currentlyOpenSwipeable.current = null;
   };
 
-  const handleComplete = async (habit: Habit) => {
+  const renderLeftActions = (habit: Habit, progress: any, dragX: any) => {
     if (habit.target_type === "check") {
-      await toggleHabit(habit.id);
-    } else {
-      await updateEntryValue(habit.id, habit.target_value);
-    }
-    swipeableRefs.current[habit.id]?.close();
-    currentlyOpenSwipeable.current = null;
-  };
-
-  const renderLeftActions = (habit: Habit) => {
-    if (habit.target_type === "check") {
-      const completed = isHabitCompleted(habit.id);
       return (
         <TouchableOpacity
-          style={[styles.completeAction, completed && styles.completeActionDone]}
-          onPress={() => handleComplete(habit)}
+          style={styles.completeAction}
+          onPress={async () => {
+            await toggleHabit(habit.id);
+            swipeableRefs.current[habit.id]?.close();
+            currentlyOpenSwipeable.current = null;
+          }}
         >
-          <Text style={styles.completeActionText}>{completed ? "Undo" : "Done"}</Text>
+          <Text style={styles.completeActionText}>
+            {isHabitCompleted(habit.id) ? "Undo" : "Done"}
+          </Text>
         </TouchableOpacity>
       );
     }
 
-    // For minutes/count types, show quick add buttons
-    const increments = habit.target_type === "minutes" ? [5, 10, 15] : [1, 5, 10];
-
+    // For minutes/count types, show progressive add zones
     return (
       <View style={styles.swipeActionsContainerLeft}>
-        {increments.map((amount) => (
-          <TouchableOpacity
-            key={amount}
-            style={styles.quickAddAction}
-            onPress={() => handleQuickAdd(habit, amount)}
-          >
-            <Text style={styles.quickAddActionText}>+{amount}</Text>
-          </TouchableOpacity>
-        ))}
+        <TouchableOpacity
+          style={[styles.quickAddAction, styles.quickAddSmall]}
+          onPress={() => handleQuickAdd(habit, 1)}
+        >
+          <Text style={styles.quickAddActionText}>+1</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.quickAddAction, styles.quickAddMedium]}
+          onPress={() => handleQuickAdd(habit, 5)}
+        >
+          <Text style={styles.quickAddActionText}>+5</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.quickAddAction, styles.quickAddLarge]}
+          onPress={() => handleQuickAdd(habit, 10)}
+        >
+          <Text style={styles.quickAddActionText}>+10</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.quickAddAction, styles.quickAddMax]}
+          onPress={() => {
+            const remaining = habit.target_value - getEntryValue(habit.id);
+            if (remaining > 0) handleQuickAdd(habit, remaining);
+          }}
+        >
+          <Text style={styles.quickAddActionText}>Max</Text>
+        </TouchableOpacity>
       </View>
     );
   };
+
   const [modalVisible, setModalVisible] = useState(false);
   const [form, setForm] = useState<NewHabitForm>(initialForm);
   const [errors, setErrors] = useState<{ targetValue?: string }>({});
@@ -261,51 +361,17 @@ export default function HabitsScreen() {
                 key={habit.id}
                 ref={(ref) => { swipeableRefs.current[habit.id] = ref; }}
                 renderRightActions={() => renderRightActions(habit)}
-                renderLeftActions={() => renderLeftActions(habit)}
+                renderLeftActions={(progress, dragX) => renderLeftActions(habit, progress, dragX)}
                 onSwipeableWillOpen={() => handleSwipeableOpen(habit.id)}
                 friction={2}
               >
-                <TouchableOpacity
-                  style={[
-                    styles.habitItem,
-                    completed && styles.habitCompleted,
-                    { borderLeftColor: habit.color || "#22C55E" },
-                  ]}
-                  onPress={() => handleHabitPress(habit)}
-                  activeOpacity={0.7}
-                >
-                  <View
-                    style={[
-                      styles.checkbox,
-                      { borderColor: habit.color || "#22C55E" },
-                      completed && { backgroundColor: habit.color || "#22C55E" },
-                    ]}
-                  >
-                    {completed && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                  <View style={styles.habitInfo}>
-                    <View style={styles.habitHeader}>
-                      {habit.icon ? <Text style={styles.habitIcon}>{habit.icon}</Text> : null}
-                      <Text
-                        style={[
-                          styles.habitText,
-                          completed && styles.habitTextCompleted,
-                        ]}
-                      >
-                        {habit.name}
-                      </Text>
-                    </View>
-                    {habit.target_type !== "check" ? (
-                      <Text style={styles.habitProgress}>
-                        {getEntryValue(habit.id)} / {habit.target_value} {habit.target_type === "minutes" ? "min" : "time(s)"}
-                      </Text>
-                    ) : habit.description ? (
-                      <Text style={styles.habitDescription} numberOfLines={1}>
-                        {habit.description}
-                      </Text>
-                    ) : null}
-                  </View>
-                </TouchableOpacity>
+                <HabitTile
+                  habit={habit}
+                  completed={completed}
+                  currentValue={getEntryValue(habit.id)}
+                  onTap={() => handleHabitPress(habit)}
+                  onLongPress={() => handleOpenOptions(habit)}
+                />
               </Swipeable>
             );
           })
@@ -486,6 +552,42 @@ export default function HabitsScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Options Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={optionsModalVisible}
+        onRequestClose={handleCloseOptions}
+      >
+        <TouchableOpacity
+          style={styles.optionsModalOverlay}
+          activeOpacity={1}
+          onPress={handleCloseOptions}
+        >
+          <View style={styles.optionsModalContent}>
+            <View style={styles.optionsHeader}>
+              <Text style={styles.optionsTitle}>
+                {optionsHabit?.icon} {optionsHabit?.name}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={handleDeleteHabit}
+            >
+              <Text style={styles.optionItemTextDanger}>Delete Habit</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.optionItemCancel}
+              onPress={handleCloseOptions}
+            >
+              <Text style={styles.optionItemText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Progress Input Modal */}
       <Modal
         animationType="fade"
@@ -616,23 +718,23 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 10,
     borderLeftWidth: 4,
+    overflow: "hidden",
+    position: "relative",
   },
-  swipeActionsContainer: {
-    flexDirection: "row",
-    marginBottom: 10,
-    marginLeft: 8,
-  },
-  deleteAction: {
-    backgroundColor: "#EF4444",
-    justifyContent: "center",
-    alignItems: "center",
-    width: 70,
+  progressFill: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
     borderRadius: 12,
   },
-  deleteActionText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 13,
+  completedFill: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    right: 0,
+    borderRadius: 12,
   },
   resetAction: {
     backgroundColor: "#F59E0B",
@@ -640,7 +742,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: 70,
     borderRadius: 12,
-    marginRight: 6,
+    marginBottom: 10,
+    marginLeft: 8,
   },
   resetActionText: {
     color: "#FFFFFF",
@@ -661,30 +764,35 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginRight: 8,
   },
-  completeActionDone: {
-    backgroundColor: "#64748B",
-  },
   completeActionText: {
     color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 13,
   },
   quickAddAction: {
-    backgroundColor: "#3B82F6",
     justifyContent: "center",
     alignItems: "center",
-    width: 50,
+    width: 46,
     borderRadius: 12,
     marginBottom: 10,
-    marginRight: 6,
+    marginRight: 4,
+  },
+  quickAddSmall: {
+    backgroundColor: "#93C5FD",
+  },
+  quickAddMedium: {
+    backgroundColor: "#60A5FA",
+  },
+  quickAddLarge: {
+    backgroundColor: "#3B82F6",
+  },
+  quickAddMax: {
+    backgroundColor: "#22C55E",
   },
   quickAddActionText: {
     color: "#FFFFFF",
     fontWeight: "600",
-    fontSize: 13,
-  },
-  habitCompleted: {
-    backgroundColor: "#DCFCE7",
+    fontSize: 12,
   },
   checkbox: {
     width: 28,
@@ -961,5 +1069,50 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     marginTop: 8,
     marginBottom: 24,
+  },
+  optionsModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  optionsModalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingBottom: 30,
+  },
+  optionsHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  optionsTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    textAlign: "center",
+  },
+  optionItem: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  optionItemCancel: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  optionItemText: {
+    fontSize: 16,
+    color: "#374151",
+    textAlign: "center",
+  },
+  optionItemTextDanger: {
+    fontSize: 16,
+    color: "#EF4444",
+    textAlign: "center",
+    fontWeight: "500",
   },
 });
