@@ -5,6 +5,7 @@ export default function DrawerLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Drawer
+        initialRouteName="habits"
         screenOptions={{
           headerShown: true,
           drawerStyle: { backgroundColor: "#F2F4F7" },
