@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
 import { useHabits } from "../context/HabitsContext";
-import { Habit } from "../types/habit";
+import { Habit, parseScheduleJson, ScheduleData } from "../types/habit";
 
 const PRESET_COLORS = [
   "#22C55E", // green
@@ -34,21 +34,33 @@ type HabitTileProps = {
   habit: Habit;
   completed: boolean;
   currentValue: number;
+  isScheduledToday: boolean;
   onTap: () => void;
   onLongPress: () => void;
 };
 
-function HabitTile({ habit, completed, currentValue, onTap, onLongPress }: HabitTileProps) {
+function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, onLongPress }: HabitTileProps) {
   const isProgressType = habit.target_type !== "check";
+  const scheduleData = parseScheduleJson(habit.schedule_json);
+  const isQuitHabit = scheduleData.habit_mode === 'quit';
+
+  // For quit habits with count/time, progress shows how much of the limit is used
   const progressPercent = isProgressType
     ? Math.min((currentValue / habit.target_value) * 100, 100)
     : (completed ? 100 : 0);
+
+  const getUnitLabel = () => {
+    if (habit.target_type === "minutes") return "min";
+    if (habit.target_type === "hours") return "hr";
+    return "";
+  };
 
   return (
     <TouchableOpacity
       style={[
         styles.habitItem,
         { borderLeftColor: habit.color || "#22C55E" },
+        !isScheduledToday && styles.habitItemDimmed,
       ]}
       onPress={onTap}
       onLongPress={onLongPress}
@@ -87,14 +99,19 @@ function HabitTile({ habit, completed, currentValue, onTap, onLongPress }: Habit
             style={[
               styles.habitText,
               completed && styles.habitTextCompleted,
+              !isScheduledToday && styles.habitTextDimmed,
             ]}
           >
             {habit.name}
           </Text>
+          {isQuitHabit && <View style={styles.quitBadge}><Text style={styles.quitBadgeText}>QUIT</Text></View>}
         </View>
-        {habit.target_type !== "check" ? (
+        {!isScheduledToday ? (
+          <Text style={styles.notScheduledText}>Not scheduled for today</Text>
+        ) : habit.target_type !== "check" ? (
           <Text style={styles.habitProgress}>
-            {currentValue} / {habit.target_value} {habit.target_type === "minutes" ? "min" : "time(s)"}
+            {currentValue} {isQuitHabit ? '/' : '/'} {habit.target_value} {getUnitLabel()}
+            {isQuitHabit && ` (limit)`}
           </Text>
         ) : habit.description ? (
           <Text style={styles.habitDescription} numberOfLines={1}>
@@ -109,11 +126,14 @@ function HabitTile({ habit, completed, currentValue, onTap, onLongPress }: Habit
 type NewHabitForm = {
   name: string;
   description: string;
-  target_type: "check" | "count" | "minutes";
+  target_type: "check" | "count" | "minutes" | "hours";
   target_value: string;
   color: string;
   icon: string;
-  schedule_type: "daily" | "weekly" | "custom";
+  schedule_type: "daily" | "specific_days" | "times_per_week";
+  habit_mode: "build" | "quit";
+  specific_days: number[];
+  times_per_week: string;
 };
 
 const initialForm: NewHabitForm = {
@@ -124,10 +144,15 @@ const initialForm: NewHabitForm = {
   color: "#22C55E",
   icon: "💪",
   schedule_type: "daily",
+  habit_mode: "build",
+  specific_days: [],
+  times_per_week: "3",
 };
 
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 export default function HabitsScreen() {
-  const { habits, toggleHabit, completedCount, isHabitCompleted, addHabit, archiveHabit, updateEntryValue, getEntryValue, loading } = useHabits();
+  const { habits, toggleHabit, completedCount, isHabitCompleted, isHabitScheduledForToday, addHabit, updateHabit, archiveHabit, updateEntryValue, getEntryValue, loading } = useHabits();
 
   // Progress input modal state
   const [progressModalVisible, setProgressModalVisible] = useState(false);
@@ -196,6 +221,38 @@ export default function HabitsScreen() {
         },
       ]
     );
+  };
+
+  const handleEditHabit = () => {
+    if (!optionsHabit) return;
+
+    // Parse schedule_json to populate form
+    const scheduleData = parseScheduleJson(optionsHabit.schedule_json);
+
+    // Determine schedule_type from schedule_json
+    let schedule_type: "daily" | "specific_days" | "times_per_week" = "daily";
+    if (scheduleData.specific_days && scheduleData.specific_days.length > 0) {
+      schedule_type = "specific_days";
+    } else if (scheduleData.times_per_week !== undefined) {
+      schedule_type = "times_per_week";
+    }
+
+    // Pre-populate form with existing habit data
+    setForm({
+      name: optionsHabit.name,
+      description: optionsHabit.description || "",
+      target_type: optionsHabit.target_type,
+      target_value: optionsHabit.target_value.toString(),
+      color: optionsHabit.color || "#22C55E",
+      icon: optionsHabit.icon || "",
+      schedule_type,
+      habit_mode: scheduleData.habit_mode || "build",
+      specific_days: scheduleData.specific_days || [],
+      times_per_week: scheduleData.times_per_week?.toString() || "3",
+    });
+    setEditingHabitId(optionsHabit.id);
+    handleCloseOptions();
+    setModalVisible(true);
   };
 
   const handleResetHabit = async (habit: Habit) => {
@@ -286,6 +343,7 @@ export default function HabitsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [form, setForm] = useState<NewHabitForm>(initialForm);
   const [errors, setErrors] = useState<{ targetValue?: string }>({});
+  const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
 
   const validateForm = (): boolean => {
     const newErrors: { targetValue?: string } = {};
@@ -307,25 +365,58 @@ export default function HabitsScreen() {
 
     const targetValue = form.target_type === "check" ? 1 : parseInt(form.target_value);
 
-    await addHabit({
-      name: form.name.trim(),
-      description: form.description.trim(),
-      target_type: form.target_type,
-      target_value: targetValue,
-      color: form.color,
-      icon: form.icon,
-      schedule_type: form.schedule_type,
-      schedule_json: "{}",
-    });
+    // Build schedule_json from form data
+    const scheduleData: ScheduleData = {
+      habit_mode: form.habit_mode,
+    };
+
+    if (form.schedule_type === "specific_days" && form.specific_days.length > 0) {
+      scheduleData.specific_days = form.specific_days;
+    } else if (form.schedule_type === "times_per_week") {
+      scheduleData.times_per_week = parseInt(form.times_per_week) || 3;
+    }
+
+    const schedule_json = JSON.stringify(scheduleData);
+
+    // Map form schedule_type to stored schedule_type
+    const storedScheduleType = form.schedule_type === "daily" ? "daily" : "custom";
+
+    if (editingHabitId) {
+      // Update existing habit
+      await updateHabit(editingHabitId, {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        target_type: form.target_type,
+        target_value: targetValue,
+        color: form.color,
+        icon: form.icon,
+        schedule_type: storedScheduleType,
+        schedule_json,
+      });
+    } else {
+      // Create new habit
+      await addHabit({
+        name: form.name.trim(),
+        description: form.description.trim(),
+        target_type: form.target_type,
+        target_value: targetValue,
+        color: form.color,
+        icon: form.icon,
+        schedule_type: storedScheduleType,
+        schedule_json,
+      });
+    }
 
     setForm(initialForm);
     setErrors({});
+    setEditingHabitId(null);
     setModalVisible(false);
   };
 
   const handleCancel = () => {
     setForm(initialForm);
     setErrors({});
+    setEditingHabitId(null);
     setModalVisible(false);
   };
 
@@ -356,6 +447,7 @@ export default function HabitsScreen() {
         ) : (
           habits.map((habit) => {
             const completed = isHabitCompleted(habit.id);
+            const isScheduledToday = isHabitScheduledForToday(habit.id);
             return (
               <Swipeable
                 key={habit.id}
@@ -369,6 +461,7 @@ export default function HabitsScreen() {
                   habit={habit}
                   completed={completed}
                   currentValue={getEntryValue(habit.id)}
+                  isScheduledToday={isScheduledToday}
                   onTap={() => handleHabitPress(habit)}
                   onLongPress={() => handleOpenOptions(habit)}
                 />
@@ -404,7 +497,7 @@ export default function HabitsScreen() {
         >
           <View style={styles.modalContent}>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>New Habit</Text>
+              <Text style={styles.modalTitle}>{editingHabitId ? "Edit Habit" : "New Habit"}</Text>
 
               <Text style={styles.label}>Name *</Text>
               <TextInput
@@ -426,13 +519,42 @@ export default function HabitsScreen() {
                 numberOfLines={2}
               />
 
+              <Text style={styles.label}>Habit Mode</Text>
+              <View style={styles.pickerRow}>
+                {(["build", "quit"] as const).map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[
+                      styles.pickerOption,
+                      form.habit_mode === mode && styles.pickerOptionSelected,
+                      mode === "quit" && form.habit_mode === mode && styles.pickerOptionQuit,
+                    ]}
+                    onPress={() => setForm({ ...form, habit_mode: mode })}
+                  >
+                    <Text
+                      style={[
+                        styles.pickerOptionText,
+                        form.habit_mode === mode && styles.pickerOptionTextSelected,
+                      ]}
+                    >
+                      {mode === "build" ? "Build" : "Quit"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.modeHint}>
+                {form.habit_mode === "build"
+                  ? "Build: Work toward completing a goal"
+                  : "Quit: Track avoidance or staying under a limit"}
+              </Text>
+
               <Text style={styles.label}>Target Type</Text>
               <View style={styles.pickerRow}>
-                {(["check", "count", "minutes"] as const).map((type) => (
+                {(["check", "count", "minutes", "hours"] as const).map((type) => (
                   <TouchableOpacity
                     key={type}
                     style={[
-                      styles.pickerOption,
+                      styles.pickerOptionSmall,
                       form.target_type === type && styles.pickerOptionSelected,
                     ]}
                     onPress={() => setForm({ ...form, target_type: type })}
@@ -452,7 +574,8 @@ export default function HabitsScreen() {
               {form.target_type !== "check" && (
                 <>
                   <Text style={styles.label}>
-                    Target Value ({form.target_type === "minutes" ? "minutes" : "count"}) *
+                    {form.habit_mode === "quit" ? "Maximum " : "Target "}
+                    {form.target_type === "minutes" ? "(minutes)" : form.target_type === "hours" ? "(hours)" : "(count)"} *
                   </Text>
                   <TextInput
                     style={[styles.input, errors.targetValue && styles.inputError]}
@@ -465,7 +588,7 @@ export default function HabitsScreen() {
                       }
                     }}
                     keyboardType="numeric"
-                    placeholder="e.g., 20"
+                    placeholder={form.habit_mode === "quit" ? "e.g., 2 (max hours)" : "e.g., 30"}
                     placeholderTextColor="#9CA3AF"
                   />
                   {errors.targetValue && (
@@ -514,7 +637,7 @@ export default function HabitsScreen() {
 
               <Text style={styles.label}>Schedule</Text>
               <View style={styles.pickerRow}>
-                {(["daily", "weekly", "custom"] as const).map((type) => (
+                {(["daily", "specific_days", "times_per_week"] as const).map((type) => (
                   <TouchableOpacity
                     key={type}
                     style={[
@@ -529,11 +652,63 @@ export default function HabitsScreen() {
                         form.schedule_type === type && styles.pickerOptionTextSelected,
                       ]}
                     >
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                      {type === "daily" ? "Daily" : type === "specific_days" ? "Specific Days" : "X per Week"}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {form.schedule_type === "specific_days" && (
+                <>
+                  <Text style={styles.label}>Select Days</Text>
+                  <View style={styles.daysRow}>
+                    {DAY_LABELS.map((label, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.dayButton,
+                          form.specific_days.includes(index) && styles.dayButtonSelected,
+                        ]}
+                        onPress={() => {
+                          const newDays = form.specific_days.includes(index)
+                            ? form.specific_days.filter(d => d !== index)
+                            : [...form.specific_days, index];
+                          setForm({ ...form, specific_days: newDays });
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.dayButtonText,
+                            form.specific_days.includes(index) && styles.dayButtonTextSelected,
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {form.schedule_type === "times_per_week" && (
+                <>
+                  <Text style={styles.label}>Times per Week</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={form.times_per_week}
+                    onChangeText={(text) => {
+                      const filtered = text.replace(/[^0-9]/g, '');
+                      setForm({ ...form, times_per_week: filtered });
+                    }}
+                    keyboardType="numeric"
+                    placeholder="e.g., 3"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                  <Text style={styles.modeHint}>
+                    Complete this habit {form.times_per_week || "X"} times each week, any days you choose
+                  </Text>
+                </>
+              )}
 
               <View style={styles.buttonRow}>
                 <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
@@ -544,7 +719,7 @@ export default function HabitsScreen() {
                   onPress={handleSave}
                   disabled={!form.name.trim()}
                 >
-                  <Text style={styles.saveButtonText}>Save</Text>
+                  <Text style={styles.saveButtonText}>{editingHabitId ? "Update" : "Save"}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -570,6 +745,13 @@ export default function HabitsScreen() {
                 {optionsHabit?.icon} {optionsHabit?.name}
               </Text>
             </View>
+
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={handleEditHabit}
+            >
+              <Text style={styles.optionItemText}>Edit Habit</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.optionItem}
@@ -640,7 +822,7 @@ export default function HabitsScreen() {
             </View>
 
             <Text style={styles.progressUnitLabel}>
-              {selectedHabit?.target_type === "minutes" ? "minutes" : "times"}
+              {selectedHabit?.target_type === "minutes" ? "minutes" : selectedHabit?.target_type === "hours" ? "hours" : "times"}
             </Text>
 
             <View style={styles.buttonRow}>
@@ -1114,5 +1296,71 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     textAlign: "center",
     fontWeight: "500",
+  },
+  // New styles for flexible habits
+  habitItemDimmed: {
+    opacity: 0.5,
+  },
+  habitTextDimmed: {
+    color: "#9CA3AF",
+  },
+  notScheduledText: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginTop: 4,
+    fontStyle: "italic",
+  },
+  quitBadge: {
+    backgroundColor: "#EF4444",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  quitBadgeText: {
+    fontSize: 10,
+    color: "#fff",
+    fontWeight: "700",
+  },
+  pickerOptionSmall: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+  },
+  pickerOptionQuit: {
+    backgroundColor: "#EF4444",
+  },
+  modeHint: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginTop: 4,
+    fontStyle: "italic",
+  },
+  daysRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 4,
+  },
+  dayButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+  },
+  dayButtonSelected: {
+    backgroundColor: "#22C55E",
+  },
+  dayButtonText: {
+    fontSize: 12,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  dayButtonTextSelected: {
+    color: "#fff",
+    fontWeight: "600",
   },
 });

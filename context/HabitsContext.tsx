@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
-import { Habit, HabitEntry } from "../types/habit";
+import { Habit, HabitEntry, parseScheduleJson, isScheduledForToday } from "../types/habit";
 import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb } from "../services/database/habitService";
 import { getEntriesForDate, upsertEntry, deleteEntryForHabit } from "../services/database/entryService";
 import { generateUUID } from "../services/database/db";
@@ -16,6 +16,7 @@ type HabitsContextType = {
   archiveHabit: (id: string) => Promise<void>;
   completedCount: number;
   isHabitCompleted: (habitId: string) => boolean;
+  isHabitScheduledForToday: (habitId: string) => boolean;
   currentDate: string;
 };
 
@@ -61,10 +62,24 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
 
   const isHabitCompleted = (habitId: string): boolean => {
     const entry = entries.get(habitId);
-    if (!entry) return false;
-
     const habit = habits.find(h => h.id === habitId);
     if (!habit) return false;
+
+    const scheduleData = parseScheduleJson(habit.schedule_json);
+    const isQuitHabit = scheduleData.habit_mode === 'quit';
+
+    if (isQuitHabit) {
+      // Quit habits: success = NOT doing the activity or staying under limit
+      if (habit.target_type === 'check') {
+        // Quit check: completed if NO entry or value is 0 (didn't do the thing)
+        return !entry || entry.value === 0;
+      }
+      // Quit count/minutes/hours: completed if value < target (under the limit)
+      return !entry || entry.value < habit.target_value;
+    }
+
+    // Build habits: normal completion logic
+    if (!entry) return false;
 
     if (habit.target_type === 'check') {
       return entry.value >= 1;
@@ -242,6 +257,13 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     setHabits(prev => prev.filter(h => h.id !== id));
   };
 
+  const isHabitScheduledForToday = (habitId: string): boolean => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return false;
+    const scheduleData = parseScheduleJson(habit.schedule_json);
+    return isScheduledForToday(scheduleData);
+  };
+
   const completedCount = habits.filter(h => isHabitCompleted(h.id)).length;
 
   return (
@@ -257,6 +279,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       archiveHabit,
       completedCount,
       isHabitCompleted,
+      isHabitScheduledForToday,
       currentDate,
     }}>
       {children}
