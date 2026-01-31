@@ -16,6 +16,7 @@ export type ScheduleData = {
   habit_mode: 'build' | 'quit';
   specific_days?: number[];    // 0=Sun, 1=Mon, ..., 6=Sat
   times_per_week?: number;     // e.g., 3
+  days_of_month?: number[];    // 1-31 for specific days of month
 };
 
 export function parseScheduleJson(json: string): ScheduleData {
@@ -25,6 +26,7 @@ export function parseScheduleJson(json: string): ScheduleData {
       habit_mode: parsed.habit_mode || 'build',
       specific_days: parsed.specific_days,
       times_per_week: parsed.times_per_week,
+      days_of_month: parsed.days_of_month,
     };
   } catch {
     return { habit_mode: 'build' };
@@ -32,11 +34,18 @@ export function parseScheduleJson(json: string): ScheduleData {
 }
 
 export function isScheduledForToday(scheduleData: ScheduleData): boolean {
-  const today = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const dayOfMonth = today.getDate(); // 1-31
+
+  // If days_of_month is set, check if today's date is in the list
+  if (scheduleData.days_of_month && scheduleData.days_of_month.length > 0) {
+    return scheduleData.days_of_month.includes(dayOfMonth);
+  }
 
   // If specific_days is set, check if today is in the list
   if (scheduleData.specific_days && scheduleData.specific_days.length > 0) {
-    return scheduleData.specific_days.includes(today);
+    return scheduleData.specific_days.includes(dayOfWeek);
   }
 
   // times_per_week habits show every day (user picks which days to log)

@@ -13,21 +13,44 @@ import {
   View,
 } from "react-native";
 import { GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
+import ColorPickerSimple from "../components/ColorPickerSimple";
 import { useHabits } from "../context/HabitsContext";
 import { Habit, parseScheduleJson, ScheduleData } from "../types/habit";
 
 const PRESET_COLORS = [
-  "#22C55E", // green
-  "#3B82F6", // blue
-  "#F59E0B", // amber
-  "#EF4444", // red
-  "#8B5CF6", // purple
-  "#EC4899", // pink
-  "#06B6D4", // cyan
-  "#F97316", // orange
+  // Row 1 - Soft pastels
+  "#86EFAC", // soft green
+  "#93C5FD", // soft blue
+  "#FCD34D", // soft yellow
+  "#FCA5A5", // soft red
+  "#C4B5FD", // soft purple
+  "#F9A8D4", // soft pink
+  "#67E8F9", // soft cyan
+  "#FDBA74", // soft orange
+  // Row 2 - Medium tones
+  "#4ADE80", // green
+  "#60A5FA", // blue
+  "#FBBF24", // amber
+  "#F87171", // red
+  "#A78BFA", // purple
+  "#F472B6", // pink
+  "#22D3EE", // cyan
+  "#FB923C", // orange
+  // Row 3 - Rich tones
+  "#22C55E", // emerald
+  "#3B82F6", // royal blue
+  "#EAB308", // gold
+  "#EF4444", // crimson
+  "#8B5CF6", // violet
+  "#EC4899", // magenta
+  "#06B6D4", // teal
+  "#F97316", // tangerine
 ];
 
 const SUGGESTED_ICONS = ["💪", "📚", "💧", "🧘", "🏃", "🍎", "😴", "✍️"];
+
+// Get a random color from presets
+const getRandomColor = () => PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
 
 
 type HabitTileProps = {
@@ -55,6 +78,7 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
     return "";
   };
 
+  // Render habit tile
   return (
     <TouchableOpacity
       style={[
@@ -130,10 +154,11 @@ type NewHabitForm = {
   target_value: string;
   color: string;
   icon: string;
-  schedule_type: "daily" | "specific_days" | "times_per_week";
+  schedule_type: "daily" | "specific_days" | "times_per_week" | "days_of_month";
   habit_mode: "build" | "quit";
-  specific_days: number[];
+  specific_days: number[]; // 0-6 for days of week
   times_per_week: string;
+  days_of_month: number[]; // 1-31 for days of month
 };
 
 const initialForm: NewHabitForm = {
@@ -147,9 +172,11 @@ const initialForm: NewHabitForm = {
   habit_mode: "build",
   specific_days: [],
   times_per_week: "3",
+  days_of_month: [],
 };
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 export default function HabitsScreen() {
   const { habits, toggleHabit, completedCount, isHabitCompleted, isHabitScheduledForToday, addHabit, updateHabit, archiveHabit, updateEntryValue, getEntryValue, loading } = useHabits();
@@ -230,27 +257,35 @@ export default function HabitsScreen() {
     const scheduleData = parseScheduleJson(optionsHabit.schedule_json);
 
     // Determine schedule_type from schedule_json
-    let schedule_type: "daily" | "specific_days" | "times_per_week" = "daily";
-    if (scheduleData.specific_days && scheduleData.specific_days.length > 0) {
+    let schedule_type: "daily" | "specific_days" | "times_per_week" | "days_of_month" = "daily";
+    if (scheduleData.days_of_month && scheduleData.days_of_month.length > 0) {
+      schedule_type = "days_of_month";
+    } else if (scheduleData.specific_days && scheduleData.specific_days.length > 0) {
       schedule_type = "specific_days";
     } else if (scheduleData.times_per_week !== undefined) {
       schedule_type = "times_per_week";
     }
 
     // Pre-populate form with existing habit data
+    const habitColor = optionsHabit.color || "#22C55E";
+    const isCustomColor = !PRESET_COLORS.includes(habitColor);
+
     setForm({
       name: optionsHabit.name,
       description: optionsHabit.description || "",
       target_type: optionsHabit.target_type,
       target_value: optionsHabit.target_value.toString(),
-      color: optionsHabit.color || "#22C55E",
+      color: habitColor,
       icon: optionsHabit.icon || "",
       schedule_type,
       habit_mode: scheduleData.habit_mode || "build",
       specific_days: scheduleData.specific_days || [],
       times_per_week: scheduleData.times_per_week?.toString() || "3",
+      days_of_month: scheduleData.days_of_month || [],
     });
     setEditingHabitId(optionsHabit.id);
+    setShowCustomColorPicker(isCustomColor);
+    setCustomColorInput(isCustomColor ? habitColor : "");
     handleCloseOptions();
     setModalVisible(true);
   };
@@ -344,6 +379,10 @@ export default function HabitsScreen() {
   const [form, setForm] = useState<NewHabitForm>(initialForm);
   const [errors, setErrors] = useState<{ targetValue?: string }>({});
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
+  const [colorPickerModalVisible, setColorPickerModalVisible] = useState(false);
+  const [showCustomColorPicker, setShowCustomColorPicker] = useState(false);
+  const [customColorInput, setCustomColorInput] = useState("");
+  const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
 
   const validateForm = (): boolean => {
     const newErrors: { targetValue?: string } = {};
@@ -374,6 +413,8 @@ export default function HabitsScreen() {
       scheduleData.specific_days = form.specific_days;
     } else if (form.schedule_type === "times_per_week") {
       scheduleData.times_per_week = parseInt(form.times_per_week) || 3;
+    } else if (form.schedule_type === "days_of_month" && form.days_of_month.length > 0) {
+      scheduleData.days_of_month = form.days_of_month;
     }
 
     const schedule_json = JSON.stringify(scheduleData);
@@ -410,6 +451,8 @@ export default function HabitsScreen() {
     setForm(initialForm);
     setErrors({});
     setEditingHabitId(null);
+    setShowCustomColorPicker(false);
+    setCustomColorInput("");
     setModalVisible(false);
   };
 
@@ -417,6 +460,8 @@ export default function HabitsScreen() {
     setForm(initialForm);
     setErrors({});
     setEditingHabitId(null);
+    setShowCustomColorPicker(false);
+    setCustomColorInput("");
     setModalVisible(false);
   };
 
@@ -479,7 +524,11 @@ export default function HabitsScreen() {
 
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          // Set random color for new habit
+          setForm({ ...initialForm, color: getRandomColor() });
+          setModalVisible(true);
+        }}
         activeOpacity={0.8}
       >
         <Text style={styles.fabText}>+</Text>
@@ -526,8 +575,7 @@ export default function HabitsScreen() {
                     key={mode}
                     style={[
                       styles.pickerOption,
-                      form.habit_mode === mode && styles.pickerOptionSelected,
-                      mode === "quit" && form.habit_mode === mode && styles.pickerOptionQuit,
+                      form.habit_mode === mode && { backgroundColor: form.color },
                     ]}
                     onPress={() => setForm({ ...form, habit_mode: mode })}
                   >
@@ -555,7 +603,7 @@ export default function HabitsScreen() {
                     key={type}
                     style={[
                       styles.pickerOptionSmall,
-                      form.target_type === type && styles.pickerOptionSelected,
+                      form.target_type === type && { backgroundColor: form.color },
                     ]}
                     onPress={() => setForm({ ...form, target_type: type })}
                   >
@@ -598,19 +646,21 @@ export default function HabitsScreen() {
               )}
 
               <Text style={styles.label}>Color</Text>
-              <View style={styles.colorRow}>
-                {PRESET_COLORS.map((color) => (
-                  <TouchableOpacity
-                    key={color}
-                    style={[
-                      styles.colorButton,
-                      { backgroundColor: color },
-                      form.color === color && styles.colorButtonSelected,
-                    ]}
-                    onPress={() => setForm({ ...form, color })}
-                  />
-                ))}
-              </View>
+              <TouchableOpacity
+                style={styles.colorPreviewButton}
+                onPress={() => {
+                  setCustomColorInput(form.color);
+                  setColorPickerModalVisible(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.colorPreviewSwatch, { backgroundColor: form.color }]} />
+                <View style={styles.colorPreviewInfo}>
+                  <Text style={styles.colorPreviewText}>Tap to change color</Text>
+                  <Text style={styles.colorPreviewHex}>{form.color}</Text>
+                </View>
+                <Text style={styles.colorPreviewArrow}>›</Text>
+              </TouchableOpacity>
 
               <Text style={styles.label}>Icon</Text>
               <View style={styles.iconRow}>
@@ -619,7 +669,7 @@ export default function HabitsScreen() {
                     key={icon}
                     style={[
                       styles.iconButton,
-                      form.icon === icon && styles.iconButtonSelected,
+                      form.icon === icon && { backgroundColor: form.color + "30", borderWidth: 2, borderColor: form.color },
                     ]}
                     onPress={() => setForm({ ...form, icon })}
                   >
@@ -636,86 +686,44 @@ export default function HabitsScreen() {
               />
 
               <Text style={styles.label}>Schedule</Text>
-              <View style={styles.pickerRow}>
-                {(["daily", "specific_days", "times_per_week"] as const).map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.pickerOption,
-                      form.schedule_type === type && styles.pickerOptionSelected,
-                    ]}
-                    onPress={() => setForm({ ...form, schedule_type: type })}
-                  >
-                    <Text
-                      style={[
-                        styles.pickerOptionText,
-                        form.schedule_type === type && styles.pickerOptionTextSelected,
-                      ]}
-                    >
-                      {type === "daily" ? "Daily" : type === "specific_days" ? "Specific Days" : "X per Week"}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {form.schedule_type === "specific_days" && (
-                <>
-                  <Text style={styles.label}>Select Days</Text>
-                  <View style={styles.daysRow}>
-                    {DAY_LABELS.map((label, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.dayButton,
-                          form.specific_days.includes(index) && styles.dayButtonSelected,
-                        ]}
-                        onPress={() => {
-                          const newDays = form.specific_days.includes(index)
-                            ? form.specific_days.filter(d => d !== index)
-                            : [...form.specific_days, index];
-                          setForm({ ...form, specific_days: newDays });
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.dayButtonText,
-                            form.specific_days.includes(index) && styles.dayButtonTextSelected,
-                          ]}
-                        >
-                          {label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </>
-              )}
-
-              {form.schedule_type === "times_per_week" && (
-                <>
-                  <Text style={styles.label}>Times per Week</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={form.times_per_week}
-                    onChangeText={(text) => {
-                      const filtered = text.replace(/[^0-9]/g, '');
-                      setForm({ ...form, times_per_week: filtered });
-                    }}
-                    keyboardType="numeric"
-                    placeholder="e.g., 3"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                  <Text style={styles.modeHint}>
-                    Complete this habit {form.times_per_week || "X"} times each week, any days you choose
+              <TouchableOpacity
+                style={styles.schedulePreviewButton}
+                onPress={() => setScheduleModalVisible(true)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.schedulePreviewIcon, { backgroundColor: form.color + "20" }]}>
+                  <Text style={styles.schedulePreviewIconText}>📅</Text>
+                </View>
+                <View style={styles.schedulePreviewInfo}>
+                  <Text style={styles.schedulePreviewTitle}>
+                    {form.schedule_type === "daily" && "Every Day"}
+                    {form.schedule_type === "specific_days" && (
+                      form.specific_days.length > 0
+                        ? form.specific_days.sort((a, b) => a - b).map(d => DAY_LABELS[d]).join(", ")
+                        : "Select days of the week"
+                    )}
+                    {form.schedule_type === "times_per_week" && `${form.times_per_week || "X"} times per week`}
+                    {form.schedule_type === "days_of_month" && (
+                      form.days_of_month.length > 0
+                        ? `${form.days_of_month.length} day${form.days_of_month.length > 1 ? "s" : ""} per month`
+                        : "Select days of the month"
+                    )}
                   </Text>
-                </>
-              )}
+                  <Text style={styles.schedulePreviewSubtitle}>Tap to change schedule</Text>
+                </View>
+                <Text style={styles.schedulePreviewArrow}>›</Text>
+              </TouchableOpacity>
 
               <View style={styles.buttonRow}>
                 <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.saveButton, !form.name.trim() && styles.saveButtonDisabled]}
+                  style={[
+                    styles.saveButton,
+                    { backgroundColor: form.color },
+                    !form.name.trim() && styles.saveButtonDisabled,
+                  ]}
                   onPress={handleSave}
                   disabled={!form.name.trim()}
                 >
@@ -835,6 +843,318 @@ export default function HabitsScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Color Picker Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={colorPickerModalVisible}
+        onRequestClose={() => setColorPickerModalVisible(false)}
+      >
+        <View style={styles.colorModalOverlay}>
+          <View style={styles.colorModalContent}>
+            <View style={styles.colorModalHeader}>
+              <Text style={styles.colorModalTitle}>Choose Color</Text>
+              <TouchableOpacity
+                style={[styles.colorModalClose, { backgroundColor: form.color }]}
+                onPress={() => {
+                  setColorPickerModalVisible(false);
+                  setShowCustomColorPicker(false);
+                }}
+              >
+                <Text style={styles.colorModalCloseText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Current color preview */}
+              <View style={[styles.colorModalPreview, { backgroundColor: form.color }]}>
+                <Text style={styles.colorModalPreviewText}>{form.color}</Text>
+              </View>
+
+              {/* Preset colors */}
+              <Text style={styles.colorModalSectionTitle}>Preset Colors</Text>
+              <View style={styles.colorModalGrid}>
+                {PRESET_COLORS.map((color) => (
+                  <TouchableOpacity
+                    key={color}
+                    style={[
+                      styles.colorModalButton,
+                      { backgroundColor: color },
+                      form.color === color && styles.colorModalButtonSelected,
+                    ]}
+                    onPress={() => {
+                      setForm({ ...form, color });
+                      setShowCustomColorPicker(false);
+                      setCustomColorInput(color);
+                    }}
+                  />
+                ))}
+              </View>
+
+              {/* Custom color toggle */}
+              <TouchableOpacity
+                style={styles.customColorToggle}
+                onPress={() => setShowCustomColorPicker(!showCustomColorPicker)}
+              >
+                <Text style={styles.customColorToggleText}>
+                  {showCustomColorPicker ? "Hide Custom Color Picker" : "Create Custom Color"}
+                </Text>
+                <Text style={styles.customColorToggleArrow}>
+                  {showCustomColorPicker ? "▲" : "▼"}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Custom color picker */}
+              {showCustomColorPicker && (
+                <View style={styles.customColorSection}>
+                  <ColorPickerSimple
+                    value={form.color}
+                    onColorChange={(color) => {
+                      setForm({ ...form, color });
+                      setCustomColorInput(color);
+                    }}
+                  />
+
+                  {/* Hex input */}
+                  <View style={styles.hexInputRow}>
+                    <Text style={styles.hexLabel}>HEX:</Text>
+                    <TextInput
+                      style={styles.hexInput}
+                      value={customColorInput}
+                      onChangeText={(text) => {
+                        let value = text.toUpperCase();
+                        if (value && !value.startsWith("#")) {
+                          value = "#" + value;
+                        }
+                        setCustomColorInput(value);
+                        if (/^#[0-9A-F]{6}$/i.test(value)) {
+                          setForm({ ...form, color: value });
+                        }
+                      }}
+                      placeholder="#FF5500"
+                      placeholderTextColor="#9CA3AF"
+                      maxLength={7}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Schedule Picker Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={scheduleModalVisible}
+        onRequestClose={() => setScheduleModalVisible(false)}
+      >
+        <View style={styles.scheduleModalOverlay}>
+          <View style={styles.scheduleModalContent}>
+            <View style={styles.scheduleModalHeader}>
+              <Text style={styles.scheduleModalTitle}>Schedule</Text>
+              <TouchableOpacity
+                style={[styles.scheduleModalClose, { backgroundColor: form.color }]}
+                onPress={() => setScheduleModalVisible(false)}
+              >
+                <Text style={styles.scheduleModalCloseText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Schedule type options */}
+              <View style={styles.scheduleOptionsList}>
+                {/* Every Day */}
+                <TouchableOpacity
+                  style={[
+                    styles.scheduleOptionItem,
+                    form.schedule_type === "daily" && { backgroundColor: form.color + "15", borderColor: form.color },
+                  ]}
+                  onPress={() => setForm({ ...form, schedule_type: "daily" })}
+                >
+                  <View style={styles.scheduleOptionLeft}>
+                    <Text style={styles.scheduleOptionEmoji}>📅</Text>
+                    <View>
+                      <Text style={styles.scheduleOptionTitle}>Every Day</Text>
+                      <Text style={styles.scheduleOptionDesc}>Repeat daily without exception</Text>
+                    </View>
+                  </View>
+                  {form.schedule_type === "daily" && (
+                    <View style={[styles.scheduleOptionCheck, { backgroundColor: form.color }]}>
+                      <Text style={styles.scheduleOptionCheckText}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Specific Days of Week */}
+                <TouchableOpacity
+                  style={[
+                    styles.scheduleOptionItem,
+                    form.schedule_type === "specific_days" && { backgroundColor: form.color + "15", borderColor: form.color },
+                  ]}
+                  onPress={() => setForm({ ...form, schedule_type: "specific_days" })}
+                >
+                  <View style={styles.scheduleOptionLeft}>
+                    <Text style={styles.scheduleOptionEmoji}>🗓️</Text>
+                    <View>
+                      <Text style={styles.scheduleOptionTitle}>Specific Days of Week</Text>
+                      <Text style={styles.scheduleOptionDesc}>Choose which days (Mon, Wed, Fri...)</Text>
+                    </View>
+                  </View>
+                  {form.schedule_type === "specific_days" && (
+                    <View style={[styles.scheduleOptionCheck, { backgroundColor: form.color }]}>
+                      <Text style={styles.scheduleOptionCheckText}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Days of Week selector */}
+                {form.schedule_type === "specific_days" && (
+                  <View style={styles.daysSelector}>
+                    {DAY_LABELS.map((label, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.daySelectorButton,
+                          form.specific_days.includes(index) && { backgroundColor: form.color },
+                        ]}
+                        onPress={() => {
+                          const newDays = form.specific_days.includes(index)
+                            ? form.specific_days.filter(d => d !== index)
+                            : [...form.specific_days, index];
+                          setForm({ ...form, specific_days: newDays });
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.daySelectorText,
+                            form.specific_days.includes(index) && styles.daySelectorTextSelected,
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* X Times Per Week */}
+                <TouchableOpacity
+                  style={[
+                    styles.scheduleOptionItem,
+                    form.schedule_type === "times_per_week" && { backgroundColor: form.color + "15", borderColor: form.color },
+                  ]}
+                  onPress={() => setForm({ ...form, schedule_type: "times_per_week" })}
+                >
+                  <View style={styles.scheduleOptionLeft}>
+                    <Text style={styles.scheduleOptionEmoji}>🔢</Text>
+                    <View>
+                      <Text style={styles.scheduleOptionTitle}>X Times Per Week</Text>
+                      <Text style={styles.scheduleOptionDesc}>Flexible - complete any days you choose</Text>
+                    </View>
+                  </View>
+                  {form.schedule_type === "times_per_week" && (
+                    <View style={[styles.scheduleOptionCheck, { backgroundColor: form.color }]}>
+                      <Text style={styles.scheduleOptionCheckText}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Times per week input */}
+                {form.schedule_type === "times_per_week" && (
+                  <View style={styles.timesPerWeekContainer}>
+                    <Text style={styles.timesPerWeekLabel}>How many times per week?</Text>
+                    <View style={styles.timesPerWeekRow}>
+                      {[1, 2, 3, 4, 5, 6, 7].map((num) => (
+                        <TouchableOpacity
+                          key={num}
+                          style={[
+                            styles.timesPerWeekButton,
+                            form.times_per_week === num.toString() && { backgroundColor: form.color },
+                          ]}
+                          onPress={() => setForm({ ...form, times_per_week: num.toString() })}
+                        >
+                          <Text
+                            style={[
+                              styles.timesPerWeekButtonText,
+                              form.times_per_week === num.toString() && styles.timesPerWeekButtonTextSelected,
+                            ]}
+                          >
+                            {num}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Specific Days of Month */}
+                <TouchableOpacity
+                  style={[
+                    styles.scheduleOptionItem,
+                    form.schedule_type === "days_of_month" && { backgroundColor: form.color + "15", borderColor: form.color },
+                  ]}
+                  onPress={() => setForm({ ...form, schedule_type: "days_of_month" })}
+                >
+                  <View style={styles.scheduleOptionLeft}>
+                    <Text style={styles.scheduleOptionEmoji}>📆</Text>
+                    <View>
+                      <Text style={styles.scheduleOptionTitle}>Specific Days of Month</Text>
+                      <Text style={styles.scheduleOptionDesc}>Choose dates (1st, 15th, 30th...)</Text>
+                    </View>
+                  </View>
+                  {form.schedule_type === "days_of_month" && (
+                    <View style={[styles.scheduleOptionCheck, { backgroundColor: form.color }]}>
+                      <Text style={styles.scheduleOptionCheckText}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Days of Month selector */}
+                {form.schedule_type === "days_of_month" && (
+                  <View style={styles.monthDaysContainer}>
+                    <Text style={styles.monthDaysLabel}>Select days of the month:</Text>
+                    <View style={styles.monthDaysGrid}>
+                      {MONTH_DAYS.map((day) => (
+                        <TouchableOpacity
+                          key={day}
+                          style={[
+                            styles.monthDayButton,
+                            form.days_of_month.includes(day) && { backgroundColor: form.color },
+                          ]}
+                          onPress={() => {
+                            const newDays = form.days_of_month.includes(day)
+                              ? form.days_of_month.filter(d => d !== day)
+                              : [...form.days_of_month, day];
+                            setForm({ ...form, days_of_month: newDays });
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.monthDayText,
+                              form.days_of_month.includes(day) && styles.monthDayTextSelected,
+                            ]}
+                          >
+                            {day}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {form.days_of_month.length > 0 && (
+                      <Text style={styles.monthDaysHint}>
+                        Selected: {form.days_of_month.sort((a, b) => a - b).join(", ")}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
     </GestureHandlerRootView>
   );
@@ -1124,19 +1444,156 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
   },
-  colorRow: {
+  // Color preview button in form
+  colorPreviewButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    padding: 12,
+  },
+  colorPreviewSwatch: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
+  },
+  colorPreviewInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  colorPreviewText: {
+    fontSize: 14,
+    color: "#374151",
+  },
+  colorPreviewHex: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginTop: 2,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+  },
+  colorPreviewArrow: {
+    fontSize: 24,
+    color: "#9CA3AF",
+    marginRight: 4,
+  },
+  // Color picker modal
+  colorModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  colorModalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: "85%",
+  },
+  colorModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  colorModalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#111827",
+  },
+  colorModalClose: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#22C55E",
+    borderRadius: 8,
+  },
+  colorModalCloseText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  colorModalPreview: {
+    height: 60,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  colorModalPreviewText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 16,
+    textShadowColor: "rgba(0,0,0,0.3)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  colorModalSectionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 12,
+  },
+  colorModalGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: 10,
+    marginBottom: 16,
   },
-  colorButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  colorModalButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
-  colorButtonSelected: {
+  colorModalButtonSelected: {
     borderWidth: 3,
     borderColor: "#111827",
+  },
+  customColorToggle: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 12,
+  },
+  customColorToggleText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#374151",
+  },
+  customColorToggleArrow: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  customColorSection: {
+    padding: 16,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  hexInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 8,
+  },
+  hexLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  hexInput: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    color: "#111827",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   iconRow: {
     flexDirection: "row",
@@ -1362,5 +1819,210 @@ const styles = StyleSheet.create({
   dayButtonTextSelected: {
     color: "#fff",
     fontWeight: "600",
+  },
+  // Schedule preview button styles
+  schedulePreviewButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    padding: 12,
+  },
+  schedulePreviewIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  schedulePreviewIconText: {
+    fontSize: 20,
+  },
+  schedulePreviewInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  schedulePreviewTitle: {
+    fontSize: 14,
+    color: "#111827",
+    fontWeight: "500",
+  },
+  schedulePreviewSubtitle: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginTop: 2,
+  },
+  schedulePreviewArrow: {
+    fontSize: 24,
+    color: "#9CA3AF",
+    marginRight: 4,
+  },
+  // Schedule modal styles
+  scheduleModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  scheduleModalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: "85%",
+  },
+  scheduleModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  scheduleModalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#111827",
+  },
+  scheduleModalClose: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  scheduleModalCloseText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  scheduleOptionsList: {
+    gap: 8,
+  },
+  scheduleOptionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  scheduleOptionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  scheduleOptionEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  scheduleOptionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  scheduleOptionDesc: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  scheduleOptionCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scheduleOptionCheckText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+  // Days of week selector in schedule modal
+  daysSelector: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  daySelectorButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+  },
+  daySelectorText: {
+    fontSize: 12,
+    color: "#374151",
+    fontWeight: "600",
+  },
+  daySelectorTextSelected: {
+    color: "#fff",
+  },
+  // Times per week selector
+  timesPerWeekContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+  },
+  timesPerWeekLabel: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginBottom: 10,
+  },
+  timesPerWeekRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  timesPerWeekButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+  },
+  timesPerWeekButtonText: {
+    fontSize: 16,
+    color: "#374151",
+    fontWeight: "600",
+  },
+  timesPerWeekButtonTextSelected: {
+    color: "#fff",
+  },
+  // Days of month selector
+  monthDaysContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+  },
+  monthDaysLabel: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginBottom: 10,
+  },
+  monthDaysGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  monthDayButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E5E7EB",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  monthDayText: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  monthDayTextSelected: {
+    color: "#fff",
+  },
+  monthDaysHint: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 12,
+    fontStyle: "italic",
   },
 });

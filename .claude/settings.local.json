@@ -12,7 +12,9 @@
       "Bash(cmd /c \"if exist C:\\\\Users\\\\ryanl\\\\OneDrive\\\\Desktop\\\\inner-city\\\\node_modules\\\\expo-sqlite echo EXISTS\")",
       "Bash(npx tsc:*)",
       "Bash(npx expo:*)",
-      "Bash(npx expo-doctor)"
+      "Bash(npx expo-doctor)",
+      "Bash(npm ls:*)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }
