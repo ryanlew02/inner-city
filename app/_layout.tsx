@@ -22,6 +22,13 @@ export default function RootLayout() {
     <HabitsProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(drawer)" />
+        <Stack.Screen
+          name="habit-form"
+          options={{
+            presentation: "modal",
+            headerShown: false,
+          }}
+        />
       </Stack>
     </HabitsProvider>
   );
