@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useRouter } from "expo-router";
+import { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,10 +13,52 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
-import { useRouter } from "expo-router";
+import { Gesture, GestureDetector, GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 import { useHabits } from "../context/HabitsContext";
 import { Habit, parseScheduleJson } from "../types/habit";
+
+const MIN_SWIPE_CHECK_PX = 60;
+const FULL_SWIPE_PX = 240;
+const FLICK_VELOCITY_THRESHOLD = 450;
+const FLICK_MIN_RATIO = 0.25;
+
+type RightSwipeGestureWrapperProps = {
+  habit: Habit;
+  onSwipeMoveRef: React.MutableRefObject<(habitId: string, tx: number) => void>;
+  onSwipeEndRef: React.MutableRefObject<(habitId: string, tx: number, velocityX: number) => void>;
+  children: React.ReactNode;
+};
+
+function RightSwipeGestureWrapper({ habit, onSwipeMoveRef, onSwipeEndRef, children }: RightSwipeGestureWrapperProps) {
+  const habitId = habit.id;
+  const habitIdRef = useRef(habitId);
+  habitIdRef.current = habitId;
+  const panGesture = useMemo(() => {
+    const reportMove = (tx: number) => onSwipeMoveRef.current(habitIdRef.current, tx);
+    const reportEnd = (tx: number, vx: number) => onSwipeEndRef.current(habitIdRef.current, tx, vx);
+    return Gesture.Pan()
+      .activeOffsetX([15, Infinity])
+      .onUpdate((e) => {
+        "worklet";
+        runOnJS(reportMove)(e.translationX);
+      })
+      .onEnd((e) => {
+        "worklet";
+        runOnJS(reportEnd)(e.translationX, e.velocityX);
+      })
+      .onFinalize(() => {
+        "worklet";
+        runOnJS(reportEnd)(0, 0);
+      });
+  }, [habitId, onSwipeMoveRef, onSwipeEndRef]);
+
+  return (
+    <GestureDetector gesture={panGesture}>
+      <View style={styles.swipeRowWrapper}>{children}</View>
+    </GestureDetector>
+  );
+}
 
 type HabitTileProps = {
   habit: Habit;
@@ -24,28 +67,44 @@ type HabitTileProps = {
   isScheduledToday: boolean;
   onTap: () => void;
   onLongPress: () => void;
+  swipeIncrement?: number;
+  swipePreviewValue?: number | null;
 };
 
-function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, onLongPress }: HabitTileProps) {
+function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, onLongPress, swipeIncrement = 0, swipePreviewValue = null }: HabitTileProps) {
   const isProgressType = habit.target_type !== "check";
   const scheduleData = parseScheduleJson(habit.schedule_json);
   const isQuitHabit = scheduleData.habit_mode === 'quit';
 
+  const displayValue = swipePreviewValue != null ? swipePreviewValue : currentValue;
   const progressPercent = isProgressType
-    ? Math.min((currentValue / habit.target_value) * 100, 100)
+    ? Math.min((displayValue / habit.target_value) * 100, 100)
     : (completed ? 100 : 0);
+  const basePercent = isProgressType && swipePreviewValue != null
+    ? Math.min((currentValue / habit.target_value) * 100, 100)
+    : progressPercent;
+  const isSwiping = swipePreviewValue != null && swipePreviewValue > currentValue;
 
   const getUnitLabel = () => {
     if (habit.target_type === "minutes") return "min";
     if (habit.target_type === "hours") return "hr";
+    if (habit.target_type === "count") return "";
     return "";
   };
+
+  const progressLabel = habit.target_type === "check"
+    ? (swipeIncrement > 0 ? "Done" : null)
+    : swipeIncrement > 0
+      ? `+${swipeIncrement} ${getUnitLabel()}`.trim()
+      : null;
+
+  const color = habit.color || "#22C55E";
 
   return (
     <TouchableOpacity
       style={[
         styles.habitItem,
-        { borderLeftColor: habit.color || "#22C55E" },
+        { borderLeftColor: color },
         !isScheduledToday && styles.habitItemDimmed,
       ]}
       onPress={onTap}
@@ -57,14 +116,27 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
         style={[
           styles.progressFill,
           {
-            backgroundColor: habit.color ? `${habit.color}30` : "#22C55E30",
+            backgroundColor: `${color}30`,
             width: `${progressPercent}%`,
           },
         ]}
       />
+      {isSwiping && (
+        <View
+          style={[
+            styles.progressFill,
+            styles.progressFillSwipe,
+            {
+              left: `${basePercent}%`,
+              width: `${progressPercent - basePercent}%`,
+              backgroundColor: `${color}99`,
+            },
+          ]}
+        />
+      )}
 
       {completed && (
-        <View style={[styles.completedFill, { backgroundColor: habit.color ? `${habit.color}40` : "#22C55E40" }]} />
+        <View style={[styles.completedFill, { backgroundColor: `${color}40` }]} />
       )}
 
       <View
@@ -103,6 +175,11 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
           </Text>
         ) : null}
       </View>
+      {progressLabel !== null && (
+        <View style={[styles.swipeFeedback, { backgroundColor: habit.color ? `${habit.color}99` : "#22C55E99" }]}>
+          <Text style={styles.swipeFeedbackText}>{progressLabel}</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -120,9 +197,12 @@ export default function HabitsScreen() {
   const [optionsModalVisible, setOptionsModalVisible] = useState(false);
   const [optionsHabit, setOptionsHabit] = useState<Habit | null>(null);
 
-  // Swipeable refs
+  // Swipeable refs (right side = Reset only)
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
   const currentlyOpenSwipeable = useRef<string | null>(null);
+
+  // Right-swipe progress: distance → increment, shown live and applied on release
+  const [swipeProgress, setSwipeProgress] = useState<{ habitId: string; translationX: number } | null>(null);
 
   const handleHabitPress = (habit: Habit) => {
     if (habit.target_type === "check") {
@@ -209,63 +289,45 @@ export default function HabitsScreen() {
     );
   };
 
-  const handleQuickAdd = async (habit: Habit, amount: number) => {
-    const currentValue = getEntryValue(habit.id);
-    await updateEntryValue(habit.id, currentValue + amount);
-    swipeableRefs.current[habit.id]?.close();
-    currentlyOpenSwipeable.current = null;
-  };
-
-  const renderLeftActions = (habit: Habit) => {
+  const getSwipeProgress = (habit: Habit, translationX: number) => {
     if (habit.target_type === "check") {
-      return (
-        <TouchableOpacity
-          style={styles.completeAction}
-          onPress={async () => {
-            await toggleHabit(habit.id);
-            swipeableRefs.current[habit.id]?.close();
-            currentlyOpenSwipeable.current = null;
-          }}
-        >
-          <Text style={styles.completeActionText}>
-            {isHabitCompleted(habit.id) ? "Undo" : "Done"}
-          </Text>
-        </TouchableOpacity>
-      );
+      const done = translationX >= MIN_SWIPE_CHECK_PX;
+      return { ratio: done ? 1 : 0, increment: done ? 1 : 0, previewValue: done ? habit.target_value : getEntryValue(habit.id) };
     }
-
-    return (
-      <View style={styles.swipeActionsContainerLeft}>
-        <TouchableOpacity
-          style={[styles.quickAddAction, styles.quickAddSmall]}
-          onPress={() => handleQuickAdd(habit, 1)}
-        >
-          <Text style={styles.quickAddActionText}>+1</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.quickAddAction, styles.quickAddMedium]}
-          onPress={() => handleQuickAdd(habit, 5)}
-        >
-          <Text style={styles.quickAddActionText}>+5</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.quickAddAction, styles.quickAddLarge]}
-          onPress={() => handleQuickAdd(habit, 10)}
-        >
-          <Text style={styles.quickAddActionText}>+10</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.quickAddAction, styles.quickAddMax]}
-          onPress={() => {
-            const remaining = habit.target_value - getEntryValue(habit.id);
-            if (remaining > 0) handleQuickAdd(habit, remaining);
-          }}
-        >
-          <Text style={styles.quickAddActionText}>Max</Text>
-        </TouchableOpacity>
-      </View>
-    );
+    const current = getEntryValue(habit.id);
+    const remaining = Math.max(0, habit.target_value - current);
+    const ratio = Math.min(1, Math.max(0, translationX / FULL_SWIPE_PX));
+    const previewValue = current + ratio * remaining;
+    const increment = Math.round(ratio * remaining);
+    return { ratio, increment, previewValue: Math.min(habit.target_value, previewValue) };
   };
+
+  const computeSwipeIncrement = (habit: Habit, translationX: number): number => {
+    return getSwipeProgress(habit, translationX).increment;
+  };
+
+  const applySwipeProgress = (habitId: string, translationX: number, velocityX: number) => {
+    const habit = habits.find((h) => h.id === habitId);
+    if (!habit) return;
+    setSwipeProgress(null);
+    if (habit.target_type === "check") {
+      if (translationX >= MIN_SWIPE_CHECK_PX) toggleHabit(habitId);
+      return;
+    }
+    const current = getEntryValue(habitId);
+    const remaining = Math.max(0, habit.target_value - current);
+    const { ratio, increment: baseIncrement } = getSwipeProgress(habit, translationX);
+    const isFlick = velocityX >= FLICK_VELOCITY_THRESHOLD && ratio >= FLICK_MIN_RATIO;
+    const increment = isFlick ? remaining : baseIncrement;
+    if (increment > 0) {
+      updateEntryValue(habitId, current + increment);
+    }
+  };
+
+  const setSwipeProgressRef = useRef((habitId: string, tx: number) => setSwipeProgress({ habitId, translationX: tx }));
+  setSwipeProgressRef.current = (habitId: string, tx: number) => setSwipeProgress({ habitId, translationX: tx });
+  const applySwipeProgressRef = useRef(applySwipeProgress);
+  applySwipeProgressRef.current = applySwipeProgress;
 
   if (loading) {
     return (
@@ -295,24 +357,37 @@ export default function HabitsScreen() {
           habits.map((habit) => {
             const completed = isHabitCompleted(habit.id);
             const isScheduledToday = isHabitScheduledForToday(habit.id);
+            const isSwipingThis = swipeProgress?.habitId === habit.id;
+            const tx = isSwipingThis ? swipeProgress.translationX : 0;
+            const { increment: swipeIncrement, previewValue: swipePreviewValue } = isSwipingThis
+              ? getSwipeProgress(habit, tx)
+              : { increment: 0, previewValue: null };
+
             return (
-              <Swipeable
+              <RightSwipeGestureWrapper
                 key={habit.id}
-                ref={(ref) => { swipeableRefs.current[habit.id] = ref; }}
-                renderRightActions={() => renderRightActions(habit)}
-                renderLeftActions={() => renderLeftActions(habit)}
-                onSwipeableWillOpen={() => handleSwipeableOpen(habit.id)}
-                friction={2}
+                habit={habit}
+                onSwipeMoveRef={setSwipeProgressRef}
+                onSwipeEndRef={applySwipeProgressRef}
               >
-                <HabitTile
-                  habit={habit}
-                  completed={completed}
-                  currentValue={getEntryValue(habit.id)}
-                  isScheduledToday={isScheduledToday}
-                  onTap={() => handleHabitPress(habit)}
-                  onLongPress={() => handleOpenOptions(habit)}
-                />
-              </Swipeable>
+                <Swipeable
+                  ref={(ref) => { swipeableRefs.current[habit.id] = ref; }}
+                  renderRightActions={() => renderRightActions(habit)}
+                  onSwipeableWillOpen={() => handleSwipeableOpen(habit.id)}
+                  friction={2}
+                >
+                  <HabitTile
+                    habit={habit}
+                    completed={completed}
+                    currentValue={getEntryValue(habit.id)}
+                    isScheduledToday={isScheduledToday}
+                    onTap={() => handleHabitPress(habit)}
+                    onLongPress={() => handleOpenOptions(habit)}
+                    swipeIncrement={swipeIncrement}
+                    swipePreviewValue={isSwipingThis ? swipePreviewValue : null}
+                  />
+                </Swipeable>
+              </RightSwipeGestureWrapper>
             );
           })
         )}
@@ -448,11 +523,11 @@ export default function HabitsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F2F4F7",
+    backgroundColor: "#F1F5F9",
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: "#F2F4F7",
+    backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -462,30 +537,32 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   header: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 15,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#111827",
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 14,
     color: "#64748B",
-    marginTop: 2,
+    marginTop: 4,
   },
   habitsList: {
     flex: 1,
-    paddingHorizontal: 20,
   },
   habitsContent: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
     paddingBottom: 100,
   },
   emptyState: {
     alignItems: "center",
-    paddingTop: 60,
+    paddingTop: 64,
   },
   emptyText: {
     fontSize: 18,
@@ -494,26 +571,41 @@ const styles = StyleSheet.create({
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#9CA3AF",
+    color: "#94A3B8",
     marginTop: 8,
   },
   habitItem: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    marginBottom: 12,
     borderLeftWidth: 4,
     overflow: "hidden",
     position: "relative",
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
   },
   progressFill: {
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    borderRadius: 12,
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
+  },
+  progressFillSwipe: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+    zIndex: 1,
   },
   completedFill: {
     position: "absolute",
@@ -521,65 +613,44 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     right: 0,
-    borderRadius: 12,
+    borderRadius: 14,
   },
   resetAction: {
     backgroundColor: "#F59E0B",
     justifyContent: "center",
     alignItems: "center",
-    width: 70,
-    borderRadius: 12,
-    marginBottom: 10,
-    marginLeft: 8,
+    width: 72,
+    borderRadius: 14,
+    marginBottom: 12,
+    marginLeft: 6,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
   },
   resetActionText: {
     color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 13,
   },
-  swipeActionsContainerLeft: {
-    flexDirection: "row",
-    marginBottom: 10,
-    marginRight: 8,
+  swipeRowWrapper: {
+    flex: 1,
+    minHeight: 0,
   },
-  completeAction: {
-    backgroundColor: "#22C55E",
+  swipeFeedback: {
+    position: "absolute",
+    right: 18,
+    top: 0,
+    bottom: 0,
     justifyContent: "center",
-    alignItems: "center",
-    width: 70,
-    borderRadius: 12,
-    marginBottom: 10,
-    marginRight: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
   },
-  completeActionText: {
+  swipeFeedbackText: {
     color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  quickAddAction: {
-    justifyContent: "center",
-    alignItems: "center",
-    width: 46,
-    borderRadius: 12,
-    marginBottom: 10,
-    marginRight: 4,
-  },
-  quickAddSmall: {
-    backgroundColor: "#93C5FD",
-  },
-  quickAddMedium: {
-    backgroundColor: "#60A5FA",
-  },
-  quickAddLarge: {
-    backgroundColor: "#3B82F6",
-  },
-  quickAddMax: {
-    backgroundColor: "#22C55E",
-  },
-  quickAddActionText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 12,
+    fontWeight: "700",
+    fontSize: 14,
   },
   checkbox: {
     width: 28,
@@ -592,11 +663,12 @@ const styles = StyleSheet.create({
   },
   checkmark: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "bold",
   },
   habitInfo: {
     flex: 1,
+    minWidth: 0,
   },
   habitHeader: {
     flexDirection: "row",
@@ -608,30 +680,32 @@ const styles = StyleSheet.create({
   },
   habitText: {
     fontSize: 16,
-    color: "#111827",
+    color: "#0F172A",
     flex: 1,
+    fontWeight: "500",
   },
   habitTextCompleted: {
-    color: "#64748B",
+    color: "#94A3B8",
     textDecorationLine: "line-through",
   },
   habitDescription: {
     fontSize: 13,
-    color: "#9CA3AF",
-    marginTop: 4,
+    color: "#94A3B8",
+    marginTop: 2,
   },
   habitProgress: {
     fontSize: 13,
     color: "#64748B",
-    marginTop: 4,
+    marginTop: 2,
     fontWeight: "500",
   },
   completedBanner: {
     backgroundColor: "#22C55E",
-    padding: 16,
-    margin: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginHorizontal: 20,
     marginBottom: 80,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
   },
   completedText: {
@@ -642,18 +716,18 @@ const styles = StyleSheet.create({
   fab: {
     position: "absolute",
     right: 20,
-    bottom: 30,
+    bottom: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
     backgroundColor: "#22C55E",
     justifyContent: "center",
     alignItems: "center",
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    elevation: 3,
+    shadowColor: "#22C55E",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   fabText: {
     fontSize: 32,
