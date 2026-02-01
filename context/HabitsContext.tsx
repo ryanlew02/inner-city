@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
-import { Habit, HabitEntry, parseScheduleJson, isScheduledForToday } from "../types/habit";
+import { AppState, AppStateStatus } from "react-native";
+import { Habit, HabitEntry, parseScheduleJson, isScheduledForToday, isScheduledForDate } from "../types/habit";
 import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb } from "../services/database/habitService";
 import { getEntriesForDate, upsertEntry, deleteEntryForHabit } from "../services/database/entryService";
 import { generateUUID } from "../services/database/db";
@@ -17,7 +18,11 @@ type HabitsContextType = {
   completedCount: number;
   isHabitCompleted: (habitId: string) => boolean;
   isHabitScheduledForToday: (habitId: string) => boolean;
+  isHabitScheduledForDate: (habitId: string, date: string) => boolean;
   currentDate: string;
+  viewingDate: string;
+  setViewingDate: (date: string) => void;
+  isViewingToday: boolean;
 };
 
 const HabitsContext = createContext<HabitsContextType | null>(null);
@@ -31,12 +36,58 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [entries, setEntries] = useState<Map<string, HabitEntry>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [currentDate] = useState(getTodayDate());
+  const [currentDate, setCurrentDate] = useState(getTodayDate());
+  const [viewingDate, setViewingDateState] = useState(getTodayDate());
   const useInMemory = useRef(false);
+  const appState = useRef(AppState.currentState);
+
+  const isViewingToday = viewingDate === currentDate;
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Check for date change when app comes to foreground
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // App has come to foreground - check if date changed
+        const today = getTodayDate();
+        if (today !== currentDate) {
+          setCurrentDate(today);
+          reloadEntriesForDate(today);
+        }
+      }
+      appState.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [currentDate]);
+
+  async function reloadEntriesForDate(date: string) {
+    if (useInMemory.current) {
+      // Clear entries for in-memory mode on new day
+      setEntries(new Map());
+      return;
+    }
+
+    try {
+      const loadedEntries = await getEntriesForDate(date);
+      const entriesMap = new Map<string, HabitEntry>();
+      loadedEntries.forEach(entry => {
+        entriesMap.set(entry.habit_id, entry);
+      });
+      setEntries(entriesMap);
+    } catch (error) {
+      console.error('Failed to reload entries for new date:', error);
+    }
+  }
+
+  const setViewingDate = async (date: string) => {
+    setViewingDateState(date);
+    await reloadEntriesForDate(date);
+  };
 
   async function loadData() {
     try {
@@ -264,6 +315,14 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     return isScheduledForToday(scheduleData);
   };
 
+  const isHabitScheduledForDateFn = (habitId: string, dateStr: string): boolean => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return false;
+    const scheduleData = parseScheduleJson(habit.schedule_json);
+    const date = new Date(dateStr + 'T00:00:00');
+    return isScheduledForDate(scheduleData, date);
+  };
+
   const completedCount = habits.filter(h => isHabitCompleted(h.id)).length;
 
   return (
@@ -280,7 +339,11 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       completedCount,
       isHabitCompleted,
       isHabitScheduledForToday,
+      isHabitScheduledForDate: isHabitScheduledForDateFn,
       currentDate,
+      viewingDate,
+      setViewingDate,
+      isViewingToday,
     }}>
       {children}
     </HabitsContext.Provider>

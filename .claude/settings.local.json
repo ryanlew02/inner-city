@@ -14,7 +14,10 @@
       "Bash(npx expo:*)",
       "Bash(npx expo-doctor)",
       "Bash(npm ls:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(pip show:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)"
     ]
   }
 }

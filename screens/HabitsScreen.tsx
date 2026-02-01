@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,452 @@ const MIN_SWIPE_CHECK_PX = 60;
 const FULL_SWIPE_PX = 240;
 const FLICK_VELOCITY_THRESHOLD = 450;
 const FLICK_MIN_RATIO = 0.25;
+
+const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+type CalendarModalProps = {
+  visible: boolean;
+  onClose: () => void;
+  selectedDate: string;
+  todayDate: string;
+  onSelectDate: (date: string) => void;
+};
+
+function CalendarModal({ visible, onClose, selectedDate, todayDate, onSelectDate }: CalendarModalProps) {
+  const [viewingMonth, setViewingMonth] = useState(() => {
+    const date = new Date(selectedDate + 'T00:00:00');
+    return { year: date.getFullYear(), month: date.getMonth() };
+  });
+  const [pickerMode, setPickerMode] = useState<'day' | 'month'>('day');
+
+  // Reset to day mode when modal opens
+  useEffect(() => {
+    if (visible) {
+      setPickerMode('day');
+      // Also sync viewingMonth to the selected date when opening
+      const date = new Date(selectedDate + 'T00:00:00');
+      setViewingMonth({ year: date.getFullYear(), month: date.getMonth() });
+    }
+  }, [visible, selectedDate]);
+
+  const today = new Date(todayDate + 'T00:00:00');
+  const selected = new Date(selectedDate + 'T00:00:00');
+
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (year: number, month: number) => {
+    return new Date(year, month, 1).getDay();
+  };
+
+  // Day mode navigation
+  const goToPreviousMonth = () => {
+    setViewingMonth(prev => {
+      if (prev.month === 0) {
+        return { year: prev.year - 1, month: 11 };
+      }
+      return { year: prev.year, month: prev.month - 1 };
+    });
+  };
+
+  const goToNextMonth = () => {
+    const nextMonth = viewingMonth.month === 11
+      ? { year: viewingMonth.year + 1, month: 0 }
+      : { year: viewingMonth.year, month: viewingMonth.month + 1 };
+
+    if (nextMonth.year > today.getFullYear() ||
+        (nextMonth.year === today.getFullYear() && nextMonth.month > today.getMonth())) {
+      return;
+    }
+    setViewingMonth(nextMonth);
+  };
+
+  const canGoNextMonth = () => {
+    const nextMonth = viewingMonth.month === 11
+      ? { year: viewingMonth.year + 1, month: 0 }
+      : { year: viewingMonth.year, month: viewingMonth.month + 1 };
+    return !(nextMonth.year > today.getFullYear() ||
+        (nextMonth.year === today.getFullYear() && nextMonth.month > today.getMonth()));
+  };
+
+  // Year mode navigation
+  const goToPreviousYear = () => {
+    setViewingMonth(prev => ({ ...prev, year: prev.year - 1 }));
+  };
+
+  const goToNextYear = () => {
+    if (viewingMonth.year < today.getFullYear()) {
+      setViewingMonth(prev => ({ ...prev, year: prev.year + 1 }));
+    }
+  };
+
+  const canGoNextYear = () => {
+    return viewingMonth.year < today.getFullYear();
+  };
+
+  const handleMonthSelect = (monthIndex: number) => {
+    // Check if this month is in the future
+    if (viewingMonth.year === today.getFullYear() && monthIndex > today.getMonth()) {
+      return;
+    }
+    setViewingMonth(prev => ({ ...prev, month: monthIndex }));
+    setPickerMode('day');
+  };
+
+  const isMonthDisabled = (monthIndex: number) => {
+    return viewingMonth.year === today.getFullYear() && monthIndex > today.getMonth();
+  };
+
+  const isMonthCurrent = (monthIndex: number) => {
+    return viewingMonth.year === today.getFullYear() && monthIndex === today.getMonth();
+  };
+
+  const handleDayPress = (day: number) => {
+    const dateStr = `${viewingMonth.year}-${String(viewingMonth.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dateObj = new Date(dateStr + 'T00:00:00');
+    if (dateObj <= today) {
+      onSelectDate(dateStr);
+      onClose();
+    }
+  };
+
+  const handleTodayPress = () => {
+    onSelectDate(todayDate);
+    onClose();
+  };
+
+  const daysInMonth = getDaysInMonth(viewingMonth.year, viewingMonth.month);
+  const firstDay = getFirstDayOfMonth(viewingMonth.year, viewingMonth.month);
+
+  const calendarDays: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) {
+    calendarDays.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    calendarDays.push(i);
+  }
+
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < calendarDays.length; i += 7) {
+    const week = calendarDays.slice(i, i + 7);
+    while (week.length < 7) {
+      week.push(null);
+    }
+    weeks.push(week);
+  }
+
+  // Month grid for month picker (3 columns x 4 rows)
+  const monthRows: number[][] = [];
+  for (let i = 0; i < 12; i += 3) {
+    monthRows.push([i, i + 1, i + 2]);
+  }
+
+  const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  return (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={calendarStyles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+          <View style={calendarStyles.container}>
+            {/* Navigation Header */}
+            <View style={calendarStyles.monthNav}>
+              <TouchableOpacity
+                onPress={pickerMode === 'day' ? goToPreviousMonth : goToPreviousYear}
+                style={calendarStyles.monthNavButton}
+              >
+                <Text style={calendarStyles.monthNavArrow}>‹</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setPickerMode(pickerMode === 'day' ? 'month' : 'day')}>
+                <Text style={calendarStyles.monthTitle}>
+                  {pickerMode === 'day'
+                    ? `${MONTHS[viewingMonth.month]} ${viewingMonth.year}`
+                    : viewingMonth.year}
+                </Text>
+                <Text style={calendarStyles.monthTitleHint}>
+                  {pickerMode === 'day' ? 'Tap to pick month' : 'Tap to pick day'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={pickerMode === 'day' ? goToNextMonth : goToNextYear}
+                style={[
+                  calendarStyles.monthNavButton,
+                  (pickerMode === 'day' ? !canGoNextMonth() : !canGoNextYear()) && calendarStyles.monthNavButtonDisabled
+                ]}
+                disabled={pickerMode === 'day' ? !canGoNextMonth() : !canGoNextYear()}
+              >
+                <Text style={[
+                  calendarStyles.monthNavArrow,
+                  (pickerMode === 'day' ? !canGoNextMonth() : !canGoNextYear()) && calendarStyles.monthNavArrowDisabled
+                ]}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            {pickerMode === 'day' ? (
+              <>
+                {/* Day Headers */}
+                <View style={calendarStyles.weekRow}>
+                  {DAYS_OF_WEEK.map(day => (
+                    <View key={day} style={calendarStyles.dayCell}>
+                      <Text style={calendarStyles.dayHeader}>{day}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Calendar Grid */}
+                {weeks.map((week, weekIndex) => (
+                  <View key={weekIndex} style={calendarStyles.weekRow}>
+                    {week.map((day, dayIndex) => {
+                      if (day === null) {
+                        return <View key={dayIndex} style={calendarStyles.dayCell} />;
+                      }
+
+                      const dateStr = `${viewingMonth.year}-${String(viewingMonth.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                      const dateObj = new Date(dateStr + 'T00:00:00');
+                      const isToday = dateStr === todayDate;
+                      const isSelected = dateStr === selectedDate;
+                      const isFuture = dateObj > today;
+
+                      return (
+                        <TouchableOpacity
+                          key={dayIndex}
+                          style={calendarStyles.dayCell}
+                          onPress={() => handleDayPress(day)}
+                          disabled={isFuture}
+                        >
+                          <View style={[
+                            calendarStyles.dayNumber,
+                            isToday && calendarStyles.todayCircle,
+                            isSelected && !isToday && calendarStyles.selectedCircle,
+                          ]}>
+                            <Text style={[
+                              calendarStyles.dayText,
+                              isToday && calendarStyles.todayText,
+                              isSelected && !isToday && calendarStyles.selectedText,
+                              isFuture && calendarStyles.futureText,
+                            ]}>
+                              {day}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ))}
+              </>
+            ) : (
+              /* Month Picker Grid */
+              <View style={calendarStyles.monthGrid}>
+                {monthRows.map((row, rowIndex) => (
+                  <View key={rowIndex} style={calendarStyles.monthRow}>
+                    {row.map(monthIndex => {
+                      const disabled = isMonthDisabled(monthIndex);
+                      const isCurrent = isMonthCurrent(monthIndex);
+                      const isSelectedMonth = viewingMonth.month === monthIndex;
+
+                      return (
+                        <TouchableOpacity
+                          key={monthIndex}
+                          style={[
+                            calendarStyles.monthCell,
+                            isCurrent && calendarStyles.currentMonthCell,
+                            isSelectedMonth && !isCurrent && calendarStyles.selectedMonthCell,
+                          ]}
+                          onPress={() => handleMonthSelect(monthIndex)}
+                          disabled={disabled}
+                        >
+                          <Text style={[
+                            calendarStyles.monthCellText,
+                            isCurrent && calendarStyles.currentMonthText,
+                            isSelectedMonth && !isCurrent && calendarStyles.selectedMonthText,
+                            disabled && calendarStyles.disabledMonthText,
+                          ]}>
+                            {MONTH_SHORT[monthIndex]}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Today Button */}
+            <TouchableOpacity style={calendarStyles.todayButton} onPress={handleTodayPress}>
+              <Text style={calendarStyles.todayButtonText}>Go to Today</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+const calendarStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  container: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    width: 320,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  monthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  monthNavButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthNavButtonDisabled: {
+    backgroundColor: '#F9FAFB',
+  },
+  monthNavArrow: {
+    fontSize: 24,
+    color: '#374151',
+    fontWeight: '300',
+  },
+  monthNavArrowDisabled: {
+    color: '#D1D5DB',
+  },
+  monthTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  monthTitleHint: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  monthGrid: {
+    paddingVertical: 8,
+  },
+  monthRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  monthCell: {
+    flex: 1,
+    marginHorizontal: 4,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  currentMonthCell: {
+    backgroundColor: '#22C55E',
+  },
+  selectedMonthCell: {
+    backgroundColor: '#E0F2FE',
+    borderWidth: 2,
+    borderColor: '#0EA5E9',
+  },
+  monthCellText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  currentMonthText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  selectedMonthText: {
+    color: '#0369A1',
+    fontWeight: '600',
+  },
+  disabledMonthText: {
+    color: '#D1D5DB',
+  },
+  weekRow: {
+    flexDirection: 'row',
+  },
+  dayCell: {
+    flex: 1,
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 2,
+  },
+  dayHeader: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  dayNumber: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayText: {
+    fontSize: 15,
+    color: '#374151',
+  },
+  todayCircle: {
+    backgroundColor: '#22C55E',
+  },
+  todayText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  selectedCircle: {
+    backgroundColor: '#E0F2FE',
+    borderWidth: 2,
+    borderColor: '#0EA5E9',
+  },
+  selectedText: {
+    color: '#0369A1',
+    fontWeight: '600',
+  },
+  futureText: {
+    color: '#D1D5DB',
+  },
+  todayButton: {
+    marginTop: 16,
+    backgroundColor: '#22C55E',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  todayButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
 
 type RightSwipeGestureWrapperProps = {
   habit: Habit;
@@ -184,9 +630,36 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
   );
 }
 
+function formatDateHeader(dateStr: string): string {
+  const date = new Date(dateStr + 'T00:00:00');
+  const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+  return date.toLocaleDateString('en-US', options);
+}
+
+function addDays(dateStr: string, days: number): string {
+  const date = new Date(dateStr + 'T00:00:00');
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
 export default function HabitsScreen() {
   const router = useRouter();
-  const { habits, toggleHabit, completedCount, isHabitCompleted, isHabitScheduledForToday, archiveHabit, updateEntryValue, getEntryValue, loading } = useHabits();
+  const {
+    habits,
+    toggleHabit,
+    completedCount,
+    isHabitCompleted,
+    isHabitScheduledForToday,
+    isHabitScheduledForDate,
+    archiveHabit,
+    updateEntryValue,
+    getEntryValue,
+    loading,
+    viewingDate,
+    setViewingDate,
+    isViewingToday,
+    currentDate,
+  } = useHabits();
 
   // Progress input modal state
   const [progressModalVisible, setProgressModalVisible] = useState(false);
@@ -196,6 +669,9 @@ export default function HabitsScreen() {
   // Options modal state
   const [optionsModalVisible, setOptionsModalVisible] = useState(false);
   const [optionsHabit, setOptionsHabit] = useState<Habit | null>(null);
+
+  // Calendar modal state
+  const [calendarVisible, setCalendarVisible] = useState(false);
 
   // Swipeable refs (right side = Reset only)
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -338,6 +814,25 @@ export default function HabitsScreen() {
     );
   }
 
+  const goToPreviousDay = () => {
+    setViewingDate(addDays(viewingDate, -1));
+  };
+
+  const goToNextDay = () => {
+    const nextDay = addDays(viewingDate, 1);
+    // Don't allow going to future dates
+    if (nextDay <= currentDate) {
+      setViewingDate(nextDay);
+    }
+  };
+
+  const isScheduledForViewingDate = (habitId: string): boolean => {
+    if (isViewingToday) {
+      return isHabitScheduledForToday(habitId);
+    }
+    return isHabitScheduledForDate(habitId, viewingDate);
+  };
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <View style={styles.header}>
@@ -346,6 +841,43 @@ export default function HabitsScreen() {
           {completedCount} of {habits.length} completed
         </Text>
       </View>
+
+      {/* Date Navigator */}
+      <View style={styles.dateNavigator}>
+        <TouchableOpacity onPress={goToPreviousDay} style={styles.dateNavButton}>
+          <Text style={styles.dateNavArrow}>‹</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => setCalendarVisible(true)} style={styles.dateDisplay}>
+          <Text style={styles.dateText}>
+            {isViewingToday ? 'Today' : formatDateHeader(viewingDate)}
+          </Text>
+          <Text style={styles.tapToOpenCalendar}>Tap to pick date</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={goToNextDay}
+          style={[styles.dateNavButton, isViewingToday && styles.dateNavButtonDisabled]}
+          disabled={isViewingToday}
+        >
+          <Text style={[styles.dateNavArrow, isViewingToday && styles.dateNavArrowDisabled]}>›</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Calendar Modal */}
+      <CalendarModal
+        visible={calendarVisible}
+        onClose={() => setCalendarVisible(false)}
+        selectedDate={viewingDate}
+        todayDate={currentDate}
+        onSelectDate={setViewingDate}
+      />
+
+      {!isViewingToday && (
+        <View style={styles.pastDateBanner}>
+          <Text style={styles.pastDateText}>Viewing {formatDateHeader(viewingDate)} (read-only)</Text>
+        </View>
+      )}
 
       <ScrollView style={styles.habitsList} contentContainerStyle={styles.habitsContent}>
         {habits.length === 0 ? (
@@ -356,12 +888,30 @@ export default function HabitsScreen() {
         ) : (
           habits.map((habit) => {
             const completed = isHabitCompleted(habit.id);
-            const isScheduledToday = isHabitScheduledForToday(habit.id);
-            const isSwipingThis = swipeProgress?.habitId === habit.id;
+            const isScheduledForDay = isScheduledForViewingDate(habit.id);
+            const isSwipingThis = swipeProgress?.habitId === habit.id && isViewingToday;
             const tx = isSwipingThis ? swipeProgress.translationX : 0;
             const { increment: swipeIncrement, previewValue: swipePreviewValue } = isSwipingThis
               ? getSwipeProgress(habit, tx)
               : { increment: 0, previewValue: null };
+
+            // When viewing past dates, render without swipe gestures
+            if (!isViewingToday) {
+              return (
+                <View key={habit.id}>
+                  <HabitTile
+                    habit={habit}
+                    completed={completed}
+                    currentValue={getEntryValue(habit.id)}
+                    isScheduledToday={isScheduledForDay}
+                    onTap={() => {}}
+                    onLongPress={() => {}}
+                    swipeIncrement={0}
+                    swipePreviewValue={null}
+                  />
+                </View>
+              );
+            }
 
             return (
               <RightSwipeGestureWrapper
@@ -380,7 +930,7 @@ export default function HabitsScreen() {
                     habit={habit}
                     completed={completed}
                     currentValue={getEntryValue(habit.id)}
-                    isScheduledToday={isScheduledToday}
+                    isScheduledToday={isScheduledForDay}
                     onTap={() => handleHabitPress(habit)}
                     onLongPress={() => handleOpenOptions(habit)}
                     swipeIncrement={swipeIncrement}
@@ -551,6 +1101,71 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#64748B",
     marginTop: 4,
+  },
+  dateNavigator: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
+    marginHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  dateNavButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dateNavButtonDisabled: {
+    backgroundColor: "#F9FAFB",
+  },
+  dateNavArrow: {
+    fontSize: 28,
+    color: "#374151",
+    fontWeight: "300",
+    marginTop: -2,
+  },
+  dateNavArrowDisabled: {
+    color: "#D1D5DB",
+  },
+  dateDisplay: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  dateText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  tapToOpenCalendar: {
+    fontSize: 11,
+    color: "#94A3B8",
+    marginTop: 2,
+  },
+  pastDateBanner: {
+    backgroundColor: "#FEF3C7",
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  pastDateText: {
+    fontSize: 13,
+    color: "#92400E",
+    fontWeight: "500",
   },
   habitsList: {
     flex: 1,

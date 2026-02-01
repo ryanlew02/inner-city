@@ -34,16 +34,19 @@ export function parseScheduleJson(json: string): ScheduleData {
 }
 
 export function isScheduledForToday(scheduleData: ScheduleData): boolean {
-  const today = new Date();
-  const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-  const dayOfMonth = today.getDate(); // 1-31
+  return isScheduledForDate(scheduleData, new Date());
+}
 
-  // If days_of_month is set, check if today's date is in the list
+export function isScheduledForDate(scheduleData: ScheduleData, date: Date): boolean {
+  const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const dayOfMonth = date.getDate(); // 1-31
+
+  // If days_of_month is set, check if the date is in the list
   if (scheduleData.days_of_month && scheduleData.days_of_month.length > 0) {
     return scheduleData.days_of_month.includes(dayOfMonth);
   }
 
-  // If specific_days is set, check if today is in the list
+  // If specific_days is set, check if the day is in the list
   if (scheduleData.specific_days && scheduleData.specific_days.length > 0) {
     return scheduleData.specific_days.includes(dayOfWeek);
   }
