@@ -18,7 +18,9 @@
       "Bash(pip show:*)",
       "Bash(pip install:*)",
       "Bash(python:*)",
-      "Bash(git -C \"C:/Users/ryanl/OneDrive/Desktop/inner-city\" status --porcelain)"
+      "Bash(git -C \"C:/Users/ryanl/OneDrive/Desktop/inner-city\" status --porcelain)",
+      "Bash(git -C \"C:/Users/ryanl/OneDrive/Desktop/inner-city\" status)",
+      "Bash(where:*)"
     ]
   }
 }

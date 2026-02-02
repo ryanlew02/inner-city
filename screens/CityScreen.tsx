@@ -1,28 +1,39 @@
 import { Text, View, StyleSheet, Image, ImageSourcePropType } from "react-native";
 import { useHabits } from "../context/HabitsContext";
 
-const TILE_SIZE = 40;
-const TILE_GAP = 1;
+// Isometric tile dimensions
+// The tile images are isometric diamonds - width is the full diamond width, height includes depth
+const TILE_WIDTH = 64;
+const TILE_HEIGHT = 64; // Includes the 3D depth portion
+const ISO_TILE_HEIGHT = 32; // Just the top diamond portion (typically half of width for 2:1 isometric)
 
 // Tile types
 type TileType = "plot" | "road_h" | "road_v" | "road_cross" | "road_corner_nw" | "road_corner_ne" | "road_corner_sw" | "road_corner_se" | "road_t_north" | "road_t_south" | "road_t_east" | "road_t_west";
 
-// Sprites - using new tile assets
-// Note: road_straight and road_t are reused with rotation transforms applied in the component
-const sprites: Record<string, ImageSourcePropType> = {
-  plot: require("../assets/sprites/ground/emptytile.jpg"),
-  road_h: require("../assets/sprites/ground/road_straight.jpg"),
-  road_v: require("../assets/sprites/ground/road_straight.jpg"),
-  road_cross: require("../assets/sprites/ground/road_cross.jpg"),
-  road_corner_nw: require("../assets/sprites/ground/road_cross.jpg"),
-  road_corner_ne: require("../assets/sprites/ground/road_cross.jpg"),
-  road_corner_sw: require("../assets/sprites/ground/road_cross.jpg"),
-  road_corner_se: require("../assets/sprites/ground/road_cross.jpg"),
-  road_t_north: require("../assets/sprites/ground/road_t.jpg"),
-  road_t_south: require("../assets/sprites/ground/road_t.jpg"),
-  road_t_east: require("../assets/sprites/ground/road_t.jpg"),
-  road_t_west: require("../assets/sprites/ground/road_t.jpg"),
+// Base grass tile - always rendered as the bottom layer
+const grassTile = require("../assets/sprites/ground/emptytile.png");
+
+// Road sprites - rendered on top of grass tiles
+// road_straight.png goes NE-SW (for vertical roads)
+// road_straight2.png goes NW-SE (for horizontal roads)
+const roadSprites: Record<string, ImageSourcePropType> = {
+  road_h: require("../assets/sprites/ground/road_straight2.png"),
+  road_v: require("../assets/sprites/ground/road_straight.png"),
+  road_cross: require("../assets/sprites/ground/road_cross.png"),
+  road_corner_nw: require("../assets/sprites/ground/road_cross.png"),
+  road_corner_ne: require("../assets/sprites/ground/road_cross.png"),
+  road_corner_sw: require("../assets/sprites/ground/road_cross.png"),
+  road_corner_se: require("../assets/sprites/ground/road_cross.png"),
+  road_t_north: require("../assets/sprites/ground/road_cross.png"),
+  road_t_south: require("../assets/sprites/ground/road_cross.png"),
+  road_t_east: require("../assets/sprites/ground/road_cross.png"),
+  road_t_west: require("../assets/sprites/ground/road_cross.png"),
 };
+
+// Check if a tile type is a road
+function isRoadTile(tileType: TileType): boolean {
+  return tileType !== "plot";
+}
 
 // Building sprites - organized by type and tier
 const buildingSprites = [
@@ -125,30 +136,47 @@ function buildPlotIndex(row: number, col: number): number | null {
   return index;
 }
 
-// Get rotation angle for road tiles
+// Get rotation angle for road tiles - no rotation, all facing same way
 function getTileRotation(tileType: TileType): string {
-  switch (tileType) {
-    case "road_v":
-      return "90deg";
-    case "road_t_north":
-      return "180deg";
-    case "road_t_east":
-      return "90deg";
-    case "road_t_west":
-      return "-90deg";
-    case "road_corner_ne":
-      return "90deg";
-    case "road_corner_se":
-      return "180deg";
-    case "road_corner_sw":
-      return "-90deg";
-    default:
-      return "0deg";
-  }
+  return "0deg";
+}
+
+// Convert grid coordinates to isometric screen position
+function gridToIso(row: number, col: number): { x: number; y: number } {
+  // Isometric transformation:
+  // - X moves right when col increases, left when row increases
+  // - Y moves down when either row or col increases
+  const x = (col - row) * (TILE_WIDTH / 2);
+  const y = (col + row) * (ISO_TILE_HEIGHT / 2);
+  return { x, y };
+}
+
+// Calculate the bounding box for the isometric grid
+function getIsoBounds(rows: number, cols: number) {
+  // Get corners of the grid in iso space
+  const topLeft = gridToIso(0, 0);
+  const topRight = gridToIso(0, cols - 1);
+  const bottomLeft = gridToIso(rows - 1, 0);
+  const bottomRight = gridToIso(rows - 1, cols - 1);
+
+  const minX = Math.min(topLeft.x, bottomLeft.x);
+  const maxX = Math.max(topRight.x, bottomRight.x) + TILE_WIDTH;
+  const minY = Math.min(topLeft.y, topRight.y);
+  const maxY = Math.max(bottomLeft.y, bottomRight.y) + TILE_HEIGHT;
+
+  return {
+    width: maxX - minX,
+    height: maxY - minY,
+    offsetX: -minX, // Offset to shift grid so it starts at 0
+    offsetY: -minY,
+  };
 }
 
 export default function CityScreen() {
   const { habits, completedCount } = useHabits();
+
+  // Calculate isometric grid bounds
+  const isoBounds = getIsoBounds(GRID_ROWS, GRID_COLS);
 
   // Count total plots
   let totalPlots = 0;
@@ -165,14 +193,38 @@ export default function CityScreen() {
     const plotIndex = buildPlotIndex(row, col);
     const hasBuilding = plotIndex !== null && plotIndex < completedCount;
     const rotation = getTileRotation(tileType);
+    const isRoad = isRoadTile(tileType);
+
+    // Get isometric position
+    const isoPos = gridToIso(row, col);
+    const screenX = isoPos.x + isoBounds.offsetX;
+    const screenY = isoPos.y + isoBounds.offsetY;
+
+    // Z-index for proper layering (tiles further down/right should be on top)
+    const zIndex = row + col;
 
     return (
-      <View key={`${row}-${col}`} style={styles.tileContainer}>
-        {/* Base tile sprite */}
-        <Image
-          source={sprites[tileType]}
-          style={[styles.tile, { transform: [{ rotate: rotation }] }]}
-        />
+      <View
+        key={`${row}-${col}`}
+        style={[
+          styles.tileContainer,
+          {
+            left: screenX,
+            top: screenY,
+            zIndex,
+          },
+        ]}
+      >
+        {/* Base grass tile - always rendered */}
+        <Image source={grassTile} style={styles.tile} />
+
+        {/* Road sprite on top of grass if this is a road tile */}
+        {isRoad && (
+          <Image
+            source={roadSprites[tileType]}
+            style={[styles.roadSprite, { transform: [{ rotate: rotation }] }]}
+          />
+        )}
 
         {/* Building sprite on top if this plot has a building */}
         {hasBuilding && (
@@ -186,19 +238,14 @@ export default function CityScreen() {
   };
 
   const renderGrid = () => {
-    const rows = [];
+    const tiles = [];
+    // Render in order for proper z-index layering (back to front)
     for (let r = 0; r < GRID_ROWS; r++) {
-      const tiles = [];
       for (let c = 0; c < GRID_COLS; c++) {
         tiles.push(renderTile(r, c));
       }
-      rows.push(
-        <View key={r} style={styles.gridRow}>
-          {tiles}
-        </View>
-      );
     }
-    return rows;
+    return tiles;
   };
 
   return (
@@ -209,7 +256,17 @@ export default function CityScreen() {
       </View>
 
       <View style={styles.cityViewport}>
-        <View style={styles.gridContainer}>{renderGrid()}</View>
+        <View
+          style={[
+            styles.gridContainer,
+            {
+              width: isoBounds.width,
+              height: isoBounds.height,
+            },
+          ]}
+        >
+          {renderGrid()}
+        </View>
       </View>
 
       <View style={styles.statsContainer}>
@@ -265,29 +322,30 @@ const styles = StyleSheet.create({
     backgroundColor: "#87CEEB",
   },
   gridContainer: {
-    backgroundColor: "#5D8A4A",
-    padding: 4,
-    borderRadius: 8,
-  },
-  gridRow: {
-    flexDirection: "row",
-  },
-  tileContainer: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
-    margin: TILE_GAP / 2,
     position: "relative",
   },
+  tileContainer: {
+    position: "absolute",
+    width: TILE_WIDTH,
+    height: TILE_HEIGHT,
+  },
   tile: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
+    width: TILE_WIDTH,
+    height: TILE_HEIGHT,
+  },
+  roadSprite: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: TILE_WIDTH,
+    height: TILE_HEIGHT,
   },
   buildingSprite: {
     position: "absolute",
     top: 0,
     left: 0,
-    width: TILE_SIZE,
-    height: TILE_SIZE,
+    width: TILE_WIDTH,
+    height: TILE_HEIGHT,
   },
   statsContainer: {
     padding: 16,
