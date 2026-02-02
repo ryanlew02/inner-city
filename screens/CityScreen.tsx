@@ -7,28 +7,49 @@ const TILE_GAP = 1;
 // Tile types
 type TileType = "plot" | "road_h" | "road_v" | "road_cross" | "road_corner_nw" | "road_corner_ne" | "road_corner_sw" | "road_corner_se" | "road_t_north" | "road_t_south" | "road_t_east" | "road_t_west";
 
-// Sprites
+// Sprites - using new tile assets
+// Note: road_straight and road_t are reused with rotation transforms applied in the component
 const sprites: Record<string, ImageSourcePropType> = {
-  plot: require("../assets/sprites/ground/barrel_variantA.png"),
-  road_h: require("../assets/sprites/ground/road_straight_h_variantA.png"),
-  road_v: require("../assets/sprites/ground/road_straight_v_variantA.png"),
-  road_cross: require("../assets/sprites/ground/road_cross_variantA.png"),
-  road_corner_nw: require("../assets/sprites/ground/road_corner_nw_variantA.png"),
-  road_corner_ne: require("../assets/sprites/ground/road_corner_ne_variantA.png"),
-  road_corner_sw: require("../assets/sprites/ground/road_corner_sw_variantA.png"),
-  road_corner_se: require("../assets/sprites/ground/road_corner_se_variantA.png"),
-  road_t_north: require("../assets/sprites/ground/road_t_north_variantA.png"),
-  road_t_south: require("../assets/sprites/ground/road_t_south_variantA.png"),
-  road_t_east: require("../assets/sprites/ground/road_t_east_variantA.png"),
-  road_t_west: require("../assets/sprites/ground/road_t_west_variantA.png"),
+  plot: require("../assets/sprites/ground/emptytile.jpg"),
+  road_h: require("../assets/sprites/ground/road_straight.jpg"),
+  road_v: require("../assets/sprites/ground/road_straight.jpg"),
+  road_cross: require("../assets/sprites/ground/road_cross.jpg"),
+  road_corner_nw: require("../assets/sprites/ground/road_cross.jpg"),
+  road_corner_ne: require("../assets/sprites/ground/road_cross.jpg"),
+  road_corner_sw: require("../assets/sprites/ground/road_cross.jpg"),
+  road_corner_se: require("../assets/sprites/ground/road_cross.jpg"),
+  road_t_north: require("../assets/sprites/ground/road_t.jpg"),
+  road_t_south: require("../assets/sprites/ground/road_t.jpg"),
+  road_t_east: require("../assets/sprites/ground/road_t.jpg"),
+  road_t_west: require("../assets/sprites/ground/road_t.jpg"),
 };
 
-// Building sprites
+// Building sprites - organized by type and tier
 const buildingSprites = [
-  require("../assets/sprites/buildings/house_small_a_variantA.png"),
-  require("../assets/sprites/buildings/house_small_b_variantA.png"),
-  require("../assets/sprites/buildings/house_medium_a_variantA.png"),
-  require("../assets/sprites/buildings/shop_small_a_variantA.png"),
+  // Residential
+  require("../assets/sprites/buildings/residential_tier1_1.jpg"),
+  require("../assets/sprites/buildings/residential_tier1_2.jpg"),
+  require("../assets/sprites/buildings/residential_tier1_3.jpg"),
+  require("../assets/sprites/buildings/residential_tier1_4.jpg"),
+  // Shops
+  require("../assets/sprites/buildings/shop_tier1_1.jpg"),
+  require("../assets/sprites/buildings/shop_tier1_2.jpg"),
+  // Offices
+  require("../assets/sprites/buildings/office_tier1_1.jpg"),
+  require("../assets/sprites/buildings/office_tier1_2.jpg"),
+  // Cafes
+  require("../assets/sprites/buildings/cafe_tier1_1.jpg"),
+  require("../assets/sprites/buildings/cafe_tier1_2.jpg"),
+  // Restaurants
+  require("../assets/sprites/buildings/restaurant_tier1_1.jpg"),
+  require("../assets/sprites/buildings/restaurant_tier1_2.jpg"),
+  // Factories
+  require("../assets/sprites/buildings/factory_tier1_1.jpg"),
+  require("../assets/sprites/buildings/factory_tier1_2.jpg"),
+  // Hospitals
+  require("../assets/sprites/buildings/hospital_tier1_1.jpg"),
+  // Schools
+  require("../assets/sprites/buildings/school_tier1_1.jpg"),
 ];
 
 // Grid layout: 2x2 building blocks with roads around them
@@ -104,6 +125,28 @@ function buildPlotIndex(row: number, col: number): number | null {
   return index;
 }
 
+// Get rotation angle for road tiles
+function getTileRotation(tileType: TileType): string {
+  switch (tileType) {
+    case "road_v":
+      return "90deg";
+    case "road_t_north":
+      return "180deg";
+    case "road_t_east":
+      return "90deg";
+    case "road_t_west":
+      return "-90deg";
+    case "road_corner_ne":
+      return "90deg";
+    case "road_corner_se":
+      return "180deg";
+    case "road_corner_sw":
+      return "-90deg";
+    default:
+      return "0deg";
+  }
+}
+
 export default function CityScreen() {
   const { habits, completedCount } = useHabits();
 
@@ -121,11 +164,15 @@ export default function CityScreen() {
 
     const plotIndex = buildPlotIndex(row, col);
     const hasBuilding = plotIndex !== null && plotIndex < completedCount;
+    const rotation = getTileRotation(tileType);
 
     return (
       <View key={`${row}-${col}`} style={styles.tileContainer}>
         {/* Base tile sprite */}
-        <Image source={sprites[tileType]} style={styles.tile} />
+        <Image
+          source={sprites[tileType]}
+          style={[styles.tile, { transform: [{ rotate: rotation }] }]}
+        />
 
         {/* Building sprite on top if this plot has a building */}
         {hasBuilding && (
