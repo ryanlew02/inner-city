@@ -10,24 +10,77 @@ const ISO_TILE_HEIGHT = 32; // Just the top diamond portion (typically half of w
 // Tile types
 type TileType = "plot" | "road_h" | "road_v" | "road_cross" | "road_corner_nw" | "road_corner_ne" | "road_corner_sw" | "road_corner_se" | "road_t_north" | "road_t_south" | "road_t_east" | "road_t_west";
 
+// City expansion configuration
+// Each expansion tier adds a ring of blocks around the city
+// Block = 2x2 plots, separated by roads every 3 tiles
+interface CitySize {
+  rows: number;
+  cols: number;
+  maxPlots: number;
+  blocksPerSide: number;
+}
+
+// Calculate city size based on how many buildings have been completed
+// Expansion happens when you're within 2 plots of filling the current tier
+function getCitySize(completedCount: number): CitySize {
+  // Tier 1: 1x1 blocks (4 plots) - 4x4 grid
+  // Tier 2: 2x2 blocks (16 plots) - 7x7 grid
+  // Tier 3: 3x3 blocks (36 plots) - 10x10 grid
+  // Tier 4: 4x4 blocks (64 plots) - 13x13 grid
+  // Tier 5: 5x5 blocks (100 plots) - 16x16 grid
+
+  // Expand slightly before filling up to show "room to grow"
+  const expansionThresholds = [
+    { threshold: 0, blocks: 1 },   // Start with 1 block
+    { threshold: 3, blocks: 2 },   // Expand at 3 buildings (before 4 is full)
+    { threshold: 12, blocks: 3 },  // Expand at 12 buildings (before 16 is full)
+    { threshold: 30, blocks: 4 },  // Expand at 30 buildings
+    { threshold: 56, blocks: 5 },  // Expand at 56 buildings
+  ];
+
+  let blocksPerSide = 1;
+  for (const tier of expansionThresholds) {
+    if (completedCount >= tier.threshold) {
+      blocksPerSide = tier.blocks;
+    }
+  }
+
+  // Grid dimensions: roads at 0, 3, 6, 9... so grid = 1 + (blocksPerSide * 3)
+  const gridSize = 1 + (blocksPerSide * 3);
+  // Plots per side = blocksPerSide * 2
+  const plotsPerSide = blocksPerSide * 2;
+  const maxPlots = plotsPerSide * plotsPerSide;
+
+  return {
+    rows: gridSize,
+    cols: gridSize,
+    maxPlots,
+    blocksPerSide,
+  };
+}
+
 // Base grass tile - always rendered as the bottom layer
 const grassTile = require("../assets/sprites/ground/emptytile.png");
 
 // Road sprites - rendered on top of grass tiles
 // road_straight.png goes NE-SW (for vertical roads)
 // road_straight2.png goes NW-SE (for horizontal roads)
+// Corners named by which edges have roads (e.g., sw_se = roads on SW and SE edges)
+// T-junctions named by which edge is missing (e.g., missing_ne = no road on NE edge)
 const roadSprites: Record<string, ImageSourcePropType> = {
   road_h: require("../assets/sprites/ground/road_straight2.png"),
   road_v: require("../assets/sprites/ground/road_straight.png"),
   road_cross: require("../assets/sprites/ground/road_cross.png"),
-  road_corner_nw: require("../assets/sprites/ground/road_cross.png"),
-  road_corner_ne: require("../assets/sprites/ground/road_cross.png"),
-  road_corner_sw: require("../assets/sprites/ground/road_cross.png"),
-  road_corner_se: require("../assets/sprites/ground/road_cross.png"),
-  road_t_north: require("../assets/sprites/ground/road_cross.png"),
-  road_t_south: require("../assets/sprites/ground/road_cross.png"),
-  road_t_east: require("../assets/sprites/ground/road_cross.png"),
-  road_t_west: require("../assets/sprites/ground/road_cross.png"),
+  // Corners - mapped by grid position to correct sprite
+  road_corner_nw: require("../assets/sprites/ground/road_corner_sw_se.jpg"), // Top of diamond (0,0)
+  road_corner_ne: require("../assets/sprites/ground/road_corner_nw_sw.jpg"), // Right of diamond (0,9)
+  road_corner_sw: require("../assets/sprites/ground/road_corner_ne_se.jpg"), // Left of diamond (9,0)
+  road_corner_se: require("../assets/sprites/ground/road_corner_nw_ne.jpg"), // Bottom of diamond (9,9)
+  // T-junctions - mapped by which direction they open toward
+  road_t_north: require("../assets/sprites/ground/road_t_missing_sw.jpg"), // Bottom edge, opens up
+  road_t_south: require("../assets/sprites/ground/road_t_missing_ne.jpg"), // Top edge, opens down
+  road_t_east: require("../assets/sprites/ground/road_t_missing_nw.jpg"),  // Left edge, opens right
+  road_t_west: require("../assets/sprites/ground/road_t_missing_se.jpg"),  // Right edge, opens left
 };
 
 // Check if a tile type is a road
@@ -65,10 +118,10 @@ const buildingSprites = [
 
 // Grid layout: 2x2 building blocks with roads around them
 // P = plot, R = road (type determined by position)
-// Layout for 25+ plots (6x6 = 36 plots arranged in 2x2 blocks)
+// Example for 3x3 blocks (10x10 grid, 36 plots):
 //
-// Row:  0    1    2    3    4    5    6    7    8
-//  0:  NW   H    H    TS   H    H    TS   H    NE
+// Row:  0    1    2    3    4    5    6    7    8    9
+//  0:  NW   H    H    TS   H    H    TS   H    H    NE
 //  1:  V    P    P    V    P    P    V    P    P    V
 //  2:  V    P    P    V    P    P    V    P    P    V
 //  3:  TE   H    H    X    H    H    X    H    H    TW
@@ -77,20 +130,17 @@ const buildingSprites = [
 //  6:  TE   H    H    X    H    H    X    H    H    TW
 //  7:  V    P    P    V    P    P    V    P    P    V
 //  8:  V    P    P    V    P    P    V    P    P    V
-//  9:  SW   H    H    TN   H    H    TN   H    SE
+//  9:  SW   H    H    TN   H    H    TN   H    H    SE
 
-const GRID_ROWS = 10;
-const GRID_COLS = 10;
-
-function getGridTileType(row: number, col: number): TileType | null {
+function getGridTileType(row: number, col: number, gridRows: number, gridCols: number): TileType | null {
   const isTopEdge = row === 0;
-  const isBottomEdge = row === GRID_ROWS - 1;
+  const isBottomEdge = row === gridRows - 1;
   const isLeftEdge = col === 0;
-  const isRightEdge = col === GRID_COLS - 1;
+  const isRightEdge = col === gridCols - 1;
 
-  // Road rows: 0, 3, 6, 9 (every 3rd starting from 0)
+  // Road rows: 0, 3, 6, 9... (every 3rd starting from 0)
   const isHorizontalRoadRow = row % 3 === 0;
-  // Road cols: 0, 3, 6, 9
+  // Road cols: 0, 3, 6, 9...
   const isVerticalRoadCol = col % 3 === 0;
 
   // Corners
@@ -118,20 +168,20 @@ function getGridTileType(row: number, col: number): TileType | null {
   return "plot";
 }
 
-function buildPlotIndex(row: number, col: number): number | null {
+function buildPlotIndex(row: number, col: number, gridRows: number, gridCols: number): number | null {
   // Only plots (not roads) get an index
-  const tileType = getGridTileType(row, col);
+  const tileType = getGridTileType(row, col, gridRows, gridCols);
   if (tileType !== "plot") return null;
 
   // Count plots in reading order (left to right, top to bottom)
   let index = 0;
   for (let r = 0; r < row; r++) {
-    for (let c = 0; c < GRID_COLS; c++) {
-      if (getGridTileType(r, c) === "plot") index++;
+    for (let c = 0; c < gridCols; c++) {
+      if (getGridTileType(r, c, gridRows, gridCols) === "plot") index++;
     }
   }
   for (let c = 0; c < col; c++) {
-    if (getGridTileType(row, c) === "plot") index++;
+    if (getGridTileType(row, c, gridRows, gridCols) === "plot") index++;
   }
   return index;
 }
@@ -175,22 +225,18 @@ function getIsoBounds(rows: number, cols: number) {
 export default function CityScreen() {
   const { habits, completedCount } = useHabits();
 
+  // Calculate dynamic city size based on completed buildings
+  const citySize = getCitySize(completedCount);
+  const { rows: GRID_ROWS, cols: GRID_COLS, maxPlots } = citySize;
+
   // Calculate isometric grid bounds
   const isoBounds = getIsoBounds(GRID_ROWS, GRID_COLS);
 
-  // Count total plots
-  let totalPlots = 0;
-  for (let r = 0; r < GRID_ROWS; r++) {
-    for (let c = 0; c < GRID_COLS; c++) {
-      if (getGridTileType(r, c) === "plot") totalPlots++;
-    }
-  }
-
   const renderTile = (row: number, col: number) => {
-    const tileType = getGridTileType(row, col);
+    const tileType = getGridTileType(row, col, GRID_ROWS, GRID_COLS);
     if (!tileType) return null;
 
-    const plotIndex = buildPlotIndex(row, col);
+    const plotIndex = buildPlotIndex(row, col, GRID_ROWS, GRID_COLS);
     const hasBuilding = plotIndex !== null && plotIndex < completedCount;
     const rotation = getTileRotation(tileType);
     const isRoad = isRoadTile(tileType);
@@ -276,7 +322,7 @@ export default function CityScreen() {
             <Text style={styles.statLabel}>Built</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{totalPlots}</Text>
+            <Text style={styles.statNumber}>{maxPlots}</Text>
             <Text style={styles.statLabel}>Plots</Text>
           </View>
           <View style={styles.statBox}>
@@ -287,7 +333,9 @@ export default function CityScreen() {
 
         <Text style={styles.messageText}>
           {completedCount === 0
-            ? "Complete habits to build on empty plots!"
+            ? "Complete habits to start building your city!"
+            : completedCount >= maxPlots - 2
+            ? "Your city is thriving! Keep building to expand!"
             : `${completedCount} building${completedCount !== 1 ? "s" : ""} constructed`}
         </Text>
       </View>

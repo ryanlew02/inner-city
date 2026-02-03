@@ -20,7 +20,8 @@
       "Bash(python:*)",
       "Bash(git -C \"C:/Users/ryanl/OneDrive/Desktop/inner-city\" status --porcelain)",
       "Bash(git -C \"C:/Users/ryanl/OneDrive/Desktop/inner-city\" status)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(node scripts/remove-backgrounds.js:*)"
     ]
   }
 }
