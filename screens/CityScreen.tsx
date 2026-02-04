@@ -72,15 +72,15 @@ const roadSprites: Record<string, ImageSourcePropType> = {
   road_v: require("../assets/sprites/ground/road_straight.png"),
   road_cross: require("../assets/sprites/ground/road_cross.png"),
   // Corners - mapped by grid position to correct sprite
-  road_corner_nw: require("../assets/sprites/ground/road_corner_sw_se.jpg"), // Top of diamond (0,0)
-  road_corner_ne: require("../assets/sprites/ground/road_corner_nw_sw.jpg"), // Right of diamond (0,9)
-  road_corner_sw: require("../assets/sprites/ground/road_corner_ne_se.jpg"), // Left of diamond (9,0)
-  road_corner_se: require("../assets/sprites/ground/road_corner_nw_ne.jpg"), // Bottom of diamond (9,9)
+  road_corner_nw: require("../assets/sprites/ground/road_corner_sw_se.png"), // Top of diamond (0,0)
+  road_corner_ne: require("../assets/sprites/ground/road_corner_nw_sw.png"), // Right of diamond (0,9)
+  road_corner_sw: require("../assets/sprites/ground/road_corner_ne_se.png"), // Left of diamond (9,0)
+  road_corner_se: require("../assets/sprites/ground/road_corner_nw_ne.png"), // Bottom of diamond (9,9)
   // T-junctions - mapped by which direction they open toward
-  road_t_north: require("../assets/sprites/ground/road_t_missing_sw.jpg"), // Bottom edge, opens up
-  road_t_south: require("../assets/sprites/ground/road_t_missing_ne.jpg"), // Top edge, opens down
-  road_t_east: require("../assets/sprites/ground/road_t_missing_nw.jpg"),  // Left edge, opens right
-  road_t_west: require("../assets/sprites/ground/road_t_missing_se.jpg"),  // Right edge, opens left
+  road_t_north: require("../assets/sprites/ground/road_t_missing_sw.png"), // Bottom edge, opens up
+  road_t_south: require("../assets/sprites/ground/road_t_missing_ne.png"), // Top edge, opens down
+  road_t_east: require("../assets/sprites/ground/road_t_missing_nw.png"),  // Left edge, opens right
+  road_t_west: require("../assets/sprites/ground/road_t_missing_se.png"),  // Right edge, opens left
 };
 
 // Check if a tile type is a road
@@ -91,29 +91,29 @@ function isRoadTile(tileType: TileType): boolean {
 // Building sprites - organized by type and tier
 const buildingSprites = [
   // Residential
-  require("../assets/sprites/buildings/residential_tier1_1.jpg"),
-  require("../assets/sprites/buildings/residential_tier1_2.jpg"),
-  require("../assets/sprites/buildings/residential_tier1_3.jpg"),
-  require("../assets/sprites/buildings/residential_tier1_4.jpg"),
+  require("../assets/sprites/buildings/residential_tier1_1.png"),
+  require("../assets/sprites/buildings/residential_tier1_2.png"),
+  require("../assets/sprites/buildings/residential_tier1_3.png"),
+  require("../assets/sprites/buildings/residential_tier1_4.png"),
   // Shops
-  require("../assets/sprites/buildings/shop_tier1_1.jpg"),
-  require("../assets/sprites/buildings/shop_tier1_2.jpg"),
+  require("../assets/sprites/buildings/shop_tier1_1.png"),
+  require("../assets/sprites/buildings/shop_tier1_2.png"),
   // Offices
-  require("../assets/sprites/buildings/office_tier1_1.jpg"),
-  require("../assets/sprites/buildings/office_tier1_2.jpg"),
+  require("../assets/sprites/buildings/office_tier1_1.png"),
+  require("../assets/sprites/buildings/office_tier1_2.png"),
   // Cafes
-  require("../assets/sprites/buildings/cafe_tier1_1.jpg"),
-  require("../assets/sprites/buildings/cafe_tier1_2.jpg"),
+  require("../assets/sprites/buildings/cafe_tier1_1.png"),
+  require("../assets/sprites/buildings/cafe_tier1_2.png"),
   // Restaurants
-  require("../assets/sprites/buildings/restaurant_tier1_1.jpg"),
-  require("../assets/sprites/buildings/restaurant_tier1_2.jpg"),
+  require("../assets/sprites/buildings/restaurant_tier1_1.png"),
+  require("../assets/sprites/buildings/restaurant_tier1_2.png"),
   // Factories
-  require("../assets/sprites/buildings/factory_tier1_1.jpg"),
-  require("../assets/sprites/buildings/factory_tier1_2.jpg"),
+  require("../assets/sprites/buildings/factory_tier1_1.png"),
+  require("../assets/sprites/buildings/factory_tier1_2.png"),
   // Hospitals
-  require("../assets/sprites/buildings/hospital_tier1_1.jpg"),
+  require("../assets/sprites/buildings/hospital_tier1_1.png"),
   // Schools
-  require("../assets/sprites/buildings/school_tier1_1.jpg"),
+  require("../assets/sprites/buildings/school_tier1_1.png"),
 ];
 
 // Grid layout: 2x2 building blocks with roads around them

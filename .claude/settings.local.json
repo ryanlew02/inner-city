@@ -21,7 +21,9 @@
       "Bash(git -C \"C:/Users/ryanl/OneDrive/Desktop/inner-city\" status --porcelain)",
       "Bash(git -C \"C:/Users/ryanl/OneDrive/Desktop/inner-city\" status)",
       "Bash(where:*)",
-      "Bash(node scripts/remove-backgrounds.js:*)"
+      "Bash(node scripts/remove-backgrounds.js:*)",
+      "Bash(powershell -Command \"Get-ChildItem *.jpg | ForEach-Object { $newName = $_BaseName + ''.png''; magick $_Name $newName; Remove-Item $_Name }\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)"
     ]
   }
 }
