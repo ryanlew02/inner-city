@@ -23,7 +23,8 @@
       "Bash(where:*)",
       "Bash(node scripts/remove-backgrounds.js:*)",
       "Bash(powershell -Command \"Get-ChildItem *.jpg | ForEach-Object { $newName = $_BaseName + ''.png''; magick $_Name $newName; Remove-Item $_Name }\")",
-      "Bash(powershell -ExecutionPolicy Bypass -File:*)"
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(ls:*)"
     ]
   }
 }

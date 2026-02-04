@@ -1,18 +1,19 @@
-import { Text, View, StyleSheet, Image, ImageSourcePropType } from "react-native";
+import { useEffect, useState } from "react";
+import { Image, ImageSourcePropType, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import BuildingSheet from "../components/BuildingSheet";
+import { BuildingType, PlacedBuilding, PURCHASABLE_BUILDING_TYPES, useBuildings } from "../context/BuildingContext";
 import { useHabits } from "../context/HabitsContext";
 
 // Isometric tile dimensions
-// The tile images are isometric diamonds - width is the full diamond width, height includes depth
 const TILE_WIDTH = 64;
-const TILE_HEIGHT = 64; // Includes the 3D depth portion
-const ISO_TILE_HEIGHT = 32; // Just the top diamond portion (typically half of width for 2:1 isometric)
+const TILE_HEIGHT = 64;
+const ISO_TILE_HEIGHT = 32;
 
 // Tile types
 type TileType = "plot" | "road_h" | "road_v" | "road_cross" | "road_corner_nw" | "road_corner_ne" | "road_corner_sw" | "road_corner_se" | "road_t_north" | "road_t_south" | "road_t_east" | "road_t_west";
 
-// City expansion configuration
-// Each expansion tier adds a ring of blocks around the city
-// Block = 2x2 plots, separated by roads every 3 tiles
 interface CitySize {
   rows: number;
   cols: number;
@@ -20,34 +21,23 @@ interface CitySize {
   blocksPerSide: number;
 }
 
-// Calculate city size based on how many buildings have been completed
-// Expansion happens when you're within 2 plots of filling the current tier
-function getCitySize(completedCount: number): CitySize {
-  // Tier 1: 1x1 blocks (4 plots) - 4x4 grid
-  // Tier 2: 2x2 blocks (16 plots) - 7x7 grid
-  // Tier 3: 3x3 blocks (36 plots) - 10x10 grid
-  // Tier 4: 4x4 blocks (64 plots) - 13x13 grid
-  // Tier 5: 5x5 blocks (100 plots) - 16x16 grid
-
-  // Expand slightly before filling up to show "room to grow"
+function getCitySize(buildingCount: number): CitySize {
   const expansionThresholds = [
-    { threshold: 0, blocks: 1 },   // Start with 1 block
-    { threshold: 3, blocks: 2 },   // Expand at 3 buildings (before 4 is full)
-    { threshold: 12, blocks: 3 },  // Expand at 12 buildings (before 16 is full)
-    { threshold: 30, blocks: 4 },  // Expand at 30 buildings
-    { threshold: 56, blocks: 5 },  // Expand at 56 buildings
+    { threshold: 0, blocks: 1 },
+    { threshold: 3, blocks: 2 },
+    { threshold: 12, blocks: 3 },
+    { threshold: 30, blocks: 4 },
+    { threshold: 56, blocks: 5 },
   ];
 
   let blocksPerSide = 1;
   for (const tier of expansionThresholds) {
-    if (completedCount >= tier.threshold) {
+    if (buildingCount >= tier.threshold) {
       blocksPerSide = tier.blocks;
     }
   }
 
-  // Grid dimensions: roads at 0, 3, 6, 9... so grid = 1 + (blocksPerSide * 3)
   const gridSize = 1 + (blocksPerSide * 3);
-  // Plots per side = blocksPerSide * 2
   const plotsPerSide = blocksPerSide * 2;
   const maxPlots = plotsPerSide * plotsPerSide;
 
@@ -59,78 +49,190 @@ function getCitySize(completedCount: number): CitySize {
   };
 }
 
-// Base grass tile - always rendered as the bottom layer
 const grassTile = require("../assets/sprites/ground/emptytile.png");
 
-// Road sprites - rendered on top of grass tiles
-// road_straight.png goes NE-SW (for vertical roads)
-// road_straight2.png goes NW-SE (for horizontal roads)
-// Corners named by which edges have roads (e.g., sw_se = roads on SW and SE edges)
-// T-junctions named by which edge is missing (e.g., missing_ne = no road on NE edge)
 const roadSprites: Record<string, ImageSourcePropType> = {
   road_h: require("../assets/sprites/ground/road_straight2.png"),
   road_v: require("../assets/sprites/ground/road_straight.png"),
   road_cross: require("../assets/sprites/ground/road_cross.png"),
-  // Corners - mapped by grid position to correct sprite
-  road_corner_nw: require("../assets/sprites/ground/road_corner_sw_se.png"), // Top of diamond (0,0)
-  road_corner_ne: require("../assets/sprites/ground/road_corner_nw_sw.png"), // Right of diamond (0,9)
-  road_corner_sw: require("../assets/sprites/ground/road_corner_ne_se.png"), // Left of diamond (9,0)
-  road_corner_se: require("../assets/sprites/ground/road_corner_nw_ne.png"), // Bottom of diamond (9,9)
-  // T-junctions - mapped by which direction they open toward
-  road_t_north: require("../assets/sprites/ground/road_t_missing_sw.png"), // Bottom edge, opens up
-  road_t_south: require("../assets/sprites/ground/road_t_missing_ne.png"), // Top edge, opens down
-  road_t_east: require("../assets/sprites/ground/road_t_missing_nw.png"),  // Left edge, opens right
-  road_t_west: require("../assets/sprites/ground/road_t_missing_se.png"),  // Right edge, opens left
+  road_corner_nw: require("../assets/sprites/ground/road_corner_sw_se.png"),
+  road_corner_ne: require("../assets/sprites/ground/road_corner_nw_sw.png"),
+  road_corner_sw: require("../assets/sprites/ground/road_corner_ne_se.png"),
+  road_corner_se: require("../assets/sprites/ground/road_corner_nw_ne.png"),
+  road_t_north: require("../assets/sprites/ground/road_t_missing_sw.png"),
+  road_t_south: require("../assets/sprites/ground/road_t_missing_ne.png"),
+  road_t_east: require("../assets/sprites/ground/road_t_missing_nw.png"),
+  road_t_west: require("../assets/sprites/ground/road_t_missing_se.png"),
 };
 
-// Check if a tile type is a road
 function isRoadTile(tileType: TileType): boolean {
   return tileType !== "plot";
 }
 
-// Building sprites - organized by type and tier
-const buildingSprites = [
-  // Residential
-  require("../assets/sprites/buildings/residential_tier1_1.png"),
-  require("../assets/sprites/buildings/residential_tier1_2.png"),
-  require("../assets/sprites/buildings/residential_tier1_3.png"),
-  require("../assets/sprites/buildings/residential_tier1_4.png"),
-  // Shops
-  require("../assets/sprites/buildings/shop_tier1_1.png"),
-  require("../assets/sprites/buildings/shop_tier1_2.png"),
-  // Offices
-  require("../assets/sprites/buildings/office_tier1_1.png"),
-  require("../assets/sprites/buildings/office_tier1_2.png"),
-  // Cafes
-  require("../assets/sprites/buildings/cafe_tier1_1.png"),
-  require("../assets/sprites/buildings/cafe_tier1_2.png"),
-  // Restaurants
-  require("../assets/sprites/buildings/restaurant_tier1_1.png"),
-  require("../assets/sprites/buildings/restaurant_tier1_2.png"),
-  // Factories
-  require("../assets/sprites/buildings/factory_tier1_1.png"),
-  require("../assets/sprites/buildings/factory_tier1_2.png"),
-  // Hospitals
-  require("../assets/sprites/buildings/hospital_tier1_1.png"),
-  // Schools
-  require("../assets/sprites/buildings/school_tier1_1.png"),
-];
+// Building sprites organized by type, tier, and variant
+// For types without tier2/3 sprites, we'll fall back to tier1
+const buildingSpriteMap: Record<string, ImageSourcePropType> = {
+  // Residential - has all tiers
+  "residential_1_1": require("../assets/sprites/buildings/residential_tier1_1.png"),
+  "residential_1_2": require("../assets/sprites/buildings/residential_tier1_2.png"),
+  "residential_1_3": require("../assets/sprites/buildings/residential_tier1_3.png"),
+  "residential_1_4": require("../assets/sprites/buildings/residential_tier1_4.png"),
+  "residential_1_5": require("../assets/sprites/buildings/residential_tier1_5.png"),
+  "residential_1_6": require("../assets/sprites/buildings/residential_tier1_6.png"),
+  "residential_1_7": require("../assets/sprites/buildings/residential_tier1_7.png"),
+  "residential_1_8": require("../assets/sprites/buildings/residential_tier1_8.png"),
+  "residential_2_1": require("../assets/sprites/buildings/residential_tier2_1.png"),
+  "residential_2_2": require("../assets/sprites/buildings/residential_tier2_2.png"),
+  "residential_2_3": require("../assets/sprites/buildings/residential_tier2_3.png"),
+  "residential_2_4": require("../assets/sprites/buildings/residential_tier2_4.png"),
+  "residential_2_5": require("../assets/sprites/buildings/residential_tier2_5.png"),
+  "residential_2_6": require("../assets/sprites/buildings/residential_tier2_6.png"),
+  "residential_2_7": require("../assets/sprites/buildings/residential_tier2_7.png"),
+  "residential_2_8": require("../assets/sprites/buildings/residential_tier2_8.png"),
+  "residential_3_1": require("../assets/sprites/buildings/residential_tier3_1.png"),
+  "residential_3_2": require("../assets/sprites/buildings/residential_tier3_2.png"),
+  "residential_3_3": require("../assets/sprites/buildings/residential_tier3_3.png"),
+  "residential_3_4": require("../assets/sprites/buildings/residential_tier3_4.png"),
+  "residential_3_5": require("../assets/sprites/buildings/residential_tier3_5.png"),
+  "residential_3_6": require("../assets/sprites/buildings/residential_tier3_6.png"),
+  "residential_3_7": require("../assets/sprites/buildings/residential_tier3_7.png"),
+  "residential_3_8": require("../assets/sprites/buildings/residential_tier3_8.png"),
+  // Office - has all tiers
+  "office_1_1": require("../assets/sprites/buildings/office_tier1_1.png"),
+  "office_1_2": require("../assets/sprites/buildings/office_tier1_2.png"),
+  "office_1_3": require("../assets/sprites/buildings/office_tier1_3.png"),
+  "office_1_4": require("../assets/sprites/buildings/office_tier1_4.png"),
+  "office_1_5": require("../assets/sprites/buildings/office_tier1_5.png"),
+  "office_1_6": require("../assets/sprites/buildings/office_tier1_6.png"),
+  "office_1_7": require("../assets/sprites/buildings/office_tier1_7.png"),
+  "office_1_8": require("../assets/sprites/buildings/office_tier1_8.png"),
+  "office_2_1": require("../assets/sprites/buildings/office_tier2_1.png"),
+  "office_2_2": require("../assets/sprites/buildings/office_tier2_2.png"),
+  "office_2_3": require("../assets/sprites/buildings/office_tier2_3.png"),
+  "office_2_4": require("../assets/sprites/buildings/office_tier2_4.png"),
+  "office_2_5": require("../assets/sprites/buildings/office_tier2_5.png"),
+  "office_2_6": require("../assets/sprites/buildings/office_tier2_6.png"),
+  "office_2_7": require("../assets/sprites/buildings/office_tier2_7.png"),
+  "office_2_8": require("../assets/sprites/buildings/office_tier2_8.png"),
+  "office_3_1": require("../assets/sprites/buildings/office_tier3_1.png"),
+  "office_3_2": require("../assets/sprites/buildings/office_tier3_2.png"),
+  "office_3_3": require("../assets/sprites/buildings/office_tier3_3.png"),
+  "office_3_4": require("../assets/sprites/buildings/office_tier3_4.png"),
+  "office_3_5": require("../assets/sprites/buildings/office_tier3_5.png"),
+  "office_3_6": require("../assets/sprites/buildings/office_tier3_6.png"),
+  "office_3_7": require("../assets/sprites/buildings/office_tier3_7.png"),
+  "office_3_8": require("../assets/sprites/buildings/office_tier3_8.png"),
+  // Shop - tier 1 only
+  "shop_1_1": require("../assets/sprites/buildings/shop_tier1_1.png"),
+  "shop_1_2": require("../assets/sprites/buildings/shop_tier1_2.png"),
+  "shop_1_3": require("../assets/sprites/buildings/shop_tier1_3.png"),
+  "shop_1_4": require("../assets/sprites/buildings/shop_tier1_4.png"),
+  "shop_1_5": require("../assets/sprites/buildings/shop_tier1_5.png"),
+  "shop_1_6": require("../assets/sprites/buildings/shop_tier1_6.png"),
+  "shop_1_7": require("../assets/sprites/buildings/shop_tier1_7.png"),
+  "shop_1_8": require("../assets/sprites/buildings/shop_tier1_8.png"),
+  // Cafe - tier 1 only
+  "cafe_1_1": require("../assets/sprites/buildings/cafe_tier1_1.png"),
+  "cafe_1_2": require("../assets/sprites/buildings/cafe_tier1_2.png"),
+  "cafe_1_3": require("../assets/sprites/buildings/cafe_tier1_3.png"),
+  "cafe_1_4": require("../assets/sprites/buildings/cafe_tier1_4.png"),
+  "cafe_1_5": require("../assets/sprites/buildings/cafe_tier1_5.png"),
+  "cafe_1_6": require("../assets/sprites/buildings/cafe_tier1_6.png"),
+  "cafe_1_7": require("../assets/sprites/buildings/cafe_tier1_7.png"),
+  "cafe_1_8": require("../assets/sprites/buildings/cafe_tier1_8.png"),
+  // Restaurant - tier 1 only
+  "restaurant_1_1": require("../assets/sprites/buildings/restaurant_tier1_1.png"),
+  "restaurant_1_2": require("../assets/sprites/buildings/restaurant_tier1_2.png"),
+  "restaurant_1_3": require("../assets/sprites/buildings/restaurant_tier1_3.png"),
+  "restaurant_1_4": require("../assets/sprites/buildings/restaurant_tier1_4.png"),
+  "restaurant_1_5": require("../assets/sprites/buildings/restaurant_tier1_5.png"),
+  "restaurant_1_6": require("../assets/sprites/buildings/restaurant_tier1_6.png"),
+  "restaurant_1_7": require("../assets/sprites/buildings/restaurant_tier1_7.png"),
+  "restaurant_1_8": require("../assets/sprites/buildings/restaurant_tier1_8.png"),
+  // Factory - tier 1 only
+  "factory_1_1": require("../assets/sprites/buildings/factory_tier1_1.png"),
+  "factory_1_2": require("../assets/sprites/buildings/factory_tier1_2.png"),
+  "factory_1_3": require("../assets/sprites/buildings/factory_tier1_3.png"),
+  "factory_1_4": require("../assets/sprites/buildings/factory_tier1_4.png"),
+  "factory_1_5": require("../assets/sprites/buildings/factory_tier1_5.png"),
+  "factory_1_6": require("../assets/sprites/buildings/factory_tier1_6.png"),
+  "factory_1_7": require("../assets/sprites/buildings/factory_tier1_7.png"),
+  "factory_1_8": require("../assets/sprites/buildings/factory_tier1_8.png"),
+  // Hospital - tier 1 only
+  "hospital_1_1": require("../assets/sprites/buildings/hospital_tier1_1.png"),
+  "hospital_1_2": require("../assets/sprites/buildings/hospital_tier1_2.png"),
+  "hospital_1_3": require("../assets/sprites/buildings/hospital_tier1_3.png"),
+  "hospital_1_4": require("../assets/sprites/buildings/hospital_tier1_4.png"),
+  "hospital_1_5": require("../assets/sprites/buildings/hospital_tier1_5.png"),
+  "hospital_1_6": require("../assets/sprites/buildings/hospital_tier1_6.png"),
+  "hospital_1_7": require("../assets/sprites/buildings/hospital_tier1_7.png"),
+  "hospital_1_8": require("../assets/sprites/buildings/hospital_tier1_8.png"),
+  // School - tier 1 only
+  "school_1_1": require("../assets/sprites/buildings/school_tier1_1.png"),
+  "school_1_2": require("../assets/sprites/buildings/school_tier1_2.png"),
+  "school_1_3": require("../assets/sprites/buildings/school_tier1_3.png"),
+  "school_1_4": require("../assets/sprites/buildings/school_tier1_4.png"),
+  "school_1_5": require("../assets/sprites/buildings/school_tier1_5.png"),
+  "school_1_6": require("../assets/sprites/buildings/school_tier1_6.png"),
+  "school_1_7": require("../assets/sprites/buildings/school_tier1_7.png"),
+  "school_1_8": require("../assets/sprites/buildings/school_tier1_8.png"),
+  // Hotel - tier 1 only
+  "hotel_1_1": require("../assets/sprites/buildings/hotel_tier1_1.png"),
+  "hotel_1_2": require("../assets/sprites/buildings/hotel_tier1_2.png"),
+  "hotel_1_3": require("../assets/sprites/buildings/hotel_tier1_3.png"),
+  "hotel_1_4": require("../assets/sprites/buildings/hotel_tier1_4.png"),
+  "hotel_1_5": require("../assets/sprites/buildings/hotel_tier1_5.png"),
+  "hotel_1_6": require("../assets/sprites/buildings/hotel_tier1_6.png"),
+  "hotel_1_7": require("../assets/sprites/buildings/hotel_tier1_7.png"),
+  "hotel_1_8": require("../assets/sprites/buildings/hotel_tier1_8.png"),
+  // Powerplant - tier 1 only
+  "powerplant_1_1": require("../assets/sprites/buildings/powerplant_tier1_1.png"),
+  "powerplant_1_2": require("../assets/sprites/buildings/powerplant_tier1_2.png"),
+  "powerplant_1_3": require("../assets/sprites/buildings/powerplant_tier1_3.png"),
+  "powerplant_1_4": require("../assets/sprites/buildings/powerplant_tier1_4.png"),
+  "powerplant_1_5": require("../assets/sprites/buildings/powerplant_tier1_5.png"),
+  "powerplant_1_6": require("../assets/sprites/buildings/powerplant_tier1_6.png"),
+  "powerplant_1_7": require("../assets/sprites/buildings/powerplant_tier1_7.png"),
+  "powerplant_1_8": require("../assets/sprites/buildings/powerplant_tier1_8.png"),
+  // Warehouse - tier 1 only
+  "warehouse_1_1": require("../assets/sprites/buildings/warehouse_tier1_1.png"),
+  "warehouse_1_2": require("../assets/sprites/buildings/warehouse_tier1_2.png"),
+  "warehouse_1_3": require("../assets/sprites/buildings/warehouse_tier1_3.png"),
+  "warehouse_1_4": require("../assets/sprites/buildings/warehouse_tier1_4.png"),
+  "warehouse_1_5": require("../assets/sprites/buildings/warehouse_tier1_5.png"),
+  "warehouse_1_6": require("../assets/sprites/buildings/warehouse_tier1_6.png"),
+  "warehouse_1_7": require("../assets/sprites/buildings/warehouse_tier1_7.png"),
+  "warehouse_1_8": require("../assets/sprites/buildings/warehouse_tier1_8.png"),
+  // Special - tier 1 only
+  "special_1_1": require("../assets/sprites/buildings/special_tier1_1.png"),
+  "special_1_2": require("../assets/sprites/buildings/special_tier1_2.png"),
+  "special_1_3": require("../assets/sprites/buildings/special_tier1_3.png"),
+  "special_1_4": require("../assets/sprites/buildings/special_tier1_4.png"),
+  "special_1_5": require("../assets/sprites/buildings/special_tier1_5.png"),
+  "special_1_6": require("../assets/sprites/buildings/special_tier1_6.png"),
+  "special_1_7": require("../assets/sprites/buildings/special_tier1_7.png"),
+  "special_1_8": require("../assets/sprites/buildings/special_tier1_8.png"),
+};
 
-// Grid layout: 2x2 building blocks with roads around them
-// P = plot, R = road (type determined by position)
-// Example for 3x3 blocks (10x10 grid, 36 plots):
-//
-// Row:  0    1    2    3    4    5    6    7    8    9
-//  0:  NW   H    H    TS   H    H    TS   H    H    NE
-//  1:  V    P    P    V    P    P    V    P    P    V
-//  2:  V    P    P    V    P    P    V    P    P    V
-//  3:  TE   H    H    X    H    H    X    H    H    TW
-//  4:  V    P    P    V    P    P    V    P    P    V
-//  5:  V    P    P    V    P    P    V    P    P    V
-//  6:  TE   H    H    X    H    H    X    H    H    TW
-//  7:  V    P    P    V    P    P    V    P    P    V
-//  8:  V    P    P    V    P    P    V    P    P    V
-//  9:  SW   H    H    TN   H    H    TN   H    H    SE
+function getBuildingSprite(building: PlacedBuilding): ImageSourcePropType {
+  const { building_type, tier, variant } = building;
+  const key = `${building_type}_${tier}_${variant}`;
+
+  // Try exact match first
+  if (buildingSpriteMap[key]) {
+    return buildingSpriteMap[key];
+  }
+
+  // Fall back to tier 1 if higher tier doesn't exist
+  const fallbackKey = `${building_type}_1_${variant}`;
+  if (buildingSpriteMap[fallbackKey]) {
+    return buildingSpriteMap[fallbackKey];
+  }
+
+  // Final fallback to variant 1 tier 1
+  const finalFallback = `${building_type}_1_1`;
+  return buildingSpriteMap[finalFallback] || buildingSpriteMap["residential_1_1"];
+}
 
 function getGridTileType(row: number, col: number, gridRows: number, gridCols: number): TileType | null {
   const isTopEdge = row === 0;
@@ -138,18 +240,14 @@ function getGridTileType(row: number, col: number, gridRows: number, gridCols: n
   const isLeftEdge = col === 0;
   const isRightEdge = col === gridCols - 1;
 
-  // Road rows: 0, 3, 6, 9... (every 3rd starting from 0)
   const isHorizontalRoadRow = row % 3 === 0;
-  // Road cols: 0, 3, 6, 9...
   const isVerticalRoadCol = col % 3 === 0;
 
-  // Corners
   if (isTopEdge && isLeftEdge) return "road_corner_nw";
   if (isTopEdge && isRightEdge) return "road_corner_ne";
   if (isBottomEdge && isLeftEdge) return "road_corner_sw";
   if (isBottomEdge && isRightEdge) return "road_corner_se";
 
-  // T-junctions and crosses at intersections
   if (isHorizontalRoadRow && isVerticalRoadCol) {
     if (isTopEdge) return "road_t_south";
     if (isBottomEdge) return "road_t_north";
@@ -158,22 +256,16 @@ function getGridTileType(row: number, col: number, gridRows: number, gridCols: n
     return "road_cross";
   }
 
-  // Horizontal roads
   if (isHorizontalRoadRow) return "road_h";
-
-  // Vertical roads
   if (isVerticalRoadCol) return "road_v";
 
-  // Everything else is a building plot
   return "plot";
 }
 
 function buildPlotIndex(row: number, col: number, gridRows: number, gridCols: number): number | null {
-  // Only plots (not roads) get an index
   const tileType = getGridTileType(row, col, gridRows, gridCols);
   if (tileType !== "plot") return null;
 
-  // Count plots in reading order (left to right, top to bottom)
   let index = 0;
   for (let r = 0; r < row; r++) {
     for (let c = 0; c < gridCols; c++) {
@@ -186,24 +278,17 @@ function buildPlotIndex(row: number, col: number, gridRows: number, gridCols: nu
   return index;
 }
 
-// Get rotation angle for road tiles - no rotation, all facing same way
 function getTileRotation(tileType: TileType): string {
   return "0deg";
 }
 
-// Convert grid coordinates to isometric screen position
 function gridToIso(row: number, col: number): { x: number; y: number } {
-  // Isometric transformation:
-  // - X moves right when col increases, left when row increases
-  // - Y moves down when either row or col increases
   const x = (col - row) * (TILE_WIDTH / 2);
   const y = (col + row) * (ISO_TILE_HEIGHT / 2);
   return { x, y };
 }
 
-// Calculate the bounding box for the isometric grid
 function getIsoBounds(rows: number, cols: number) {
-  // Get corners of the grid in iso space
   const topLeft = gridToIso(0, 0);
   const topRight = gridToIso(0, cols - 1);
   const bottomLeft = gridToIso(rows - 1, 0);
@@ -217,41 +302,180 @@ function getIsoBounds(rows: number, cols: number) {
   return {
     width: maxX - minX,
     height: maxY - minY,
-    offsetX: -minX, // Offset to shift grid so it starts at 0
+    offsetX: -minX,
     offsetY: -minY,
   };
 }
 
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 2.0;
+
 export default function CityScreen() {
-  const { habits, completedCount } = useHabits();
+  const { habits, completedCount, setOnTokenEarned } = useHabits();
+  const {
+    buildings,
+    tokens,
+    placeBuilding,
+    autoBuildBuilding,
+    upgradeBuilding,
+    getBuildingAtPlot,
+    refreshTokens,
+  } = useBuildings();
 
-  // Calculate dynamic city size based on completed buildings
-  const citySize = getCitySize(completedCount);
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const [sheetMode, setSheetMode] = useState<"build" | "upgrade" | "autobuild">("build");
+  const [selectedPlotIndex, setSelectedPlotIndex] = useState<number | null>(null);
+  const [selectedBuilding, setSelectedBuilding] = useState<PlacedBuilding | undefined>(undefined);
+
+  // Register callback to refresh tokens when habit is completed
+  useEffect(() => {
+    setOnTokenEarned(() => refreshTokens);
+    return () => setOnTokenEarned(undefined);
+  }, [setOnTokenEarned, refreshTokens]);
+
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      savedScale.value = scale.value;
+    })
+    .onUpdate((event) => {
+      const newScale = savedScale.value * event.scale;
+      scale.value = Math.min(Math.max(newScale, MIN_SCALE), MAX_SCALE);
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    })
+    .onUpdate((event) => {
+      translateX.value = savedTranslateX.value + event.translationX;
+      translateY.value = savedTranslateY.value + event.translationY;
+    });
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      scale.value = withSpring(1);
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+      savedScale.value = 1;
+      savedTranslateX.value = 0;
+      savedTranslateY.value = 0;
+    });
+
+  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
+
+  const animatedGridStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const buildingCount = buildings.length;
+  const citySize = getCitySize(buildingCount);
   const { rows: GRID_ROWS, cols: GRID_COLS, maxPlots } = citySize;
-
-  // Calculate isometric grid bounds
   const isoBounds = getIsoBounds(GRID_ROWS, GRID_COLS);
+
+  const handlePlotPress = (plotIndex: number) => {
+    const existingBuilding = getBuildingAtPlot(plotIndex);
+    if (existingBuilding) {
+      // Open upgrade sheet
+      setSelectedBuilding(existingBuilding);
+      setSheetMode("upgrade");
+      setSheetVisible(true);
+    } else {
+      // Open build sheet
+      setSelectedPlotIndex(plotIndex);
+      setSheetMode("build");
+      setSheetVisible(true);
+    }
+  };
+
+  const handleAutoBuild = () => {
+    setSheetMode("autobuild");
+    setSheetVisible(true);
+  };
+
+  const handleAutoBuildOne = async () => {
+    const randomType = PURCHASABLE_BUILDING_TYPES[
+      Math.floor(Math.random() * PURCHASABLE_BUILDING_TYPES.length)
+    ];
+    const success = await autoBuildBuilding(randomType, maxPlots);
+    if (success) {
+      setSheetVisible(false);
+    }
+  };
+
+  const handleAutoBuildAll = async () => {
+    const buildingsCanAfford = Math.floor(tokens / 3);
+    for (let i = 0; i < buildingsCanAfford; i++) {
+      const randomType = PURCHASABLE_BUILDING_TYPES[
+        Math.floor(Math.random() * PURCHASABLE_BUILDING_TYPES.length)
+      ];
+      const success = await autoBuildBuilding(randomType, maxPlots);
+      if (!success) break;
+    }
+    setSheetVisible(false);
+  };
+
+  const handleSelectBuildingType = async (type: BuildingType) => {
+    let success = false;
+    if (selectedPlotIndex !== null) {
+      success = await placeBuilding(selectedPlotIndex, type);
+    } else {
+      success = await autoBuildBuilding(type, maxPlots);
+    }
+    if (success) {
+      setSheetVisible(false);
+      setSelectedPlotIndex(null);
+    }
+  };
+
+  const handleUpgrade = async () => {
+    if (selectedBuilding) {
+      const success = await upgradeBuilding(selectedBuilding.id);
+      if (success) {
+        setSheetVisible(false);
+        setSelectedBuilding(undefined);
+      }
+    }
+  };
+
+  const handleSheetClose = () => {
+    setSheetVisible(false);
+    setSelectedPlotIndex(null);
+    setSelectedBuilding(undefined);
+  };
 
   const renderTile = (row: number, col: number) => {
     const tileType = getGridTileType(row, col, GRID_ROWS, GRID_COLS);
     if (!tileType) return null;
 
     const plotIndex = buildPlotIndex(row, col, GRID_ROWS, GRID_COLS);
-    const hasBuilding = plotIndex !== null && plotIndex < completedCount;
+    const building = plotIndex !== null ? getBuildingAtPlot(plotIndex) : null;
     const rotation = getTileRotation(tileType);
     const isRoad = isRoadTile(tileType);
+    const isPlot = tileType === "plot";
 
-    // Get isometric position
     const isoPos = gridToIso(row, col);
     const screenX = isoPos.x + isoBounds.offsetX;
     const screenY = isoPos.y + isoBounds.offsetY;
-
-    // Z-index for proper layering (tiles further down/right should be on top)
     const zIndex = row + col;
 
-    return (
+    const tileContent = (
       <View
-        key={`${row}-${col}`}
         style={[
           styles.tileContainer,
           {
@@ -261,10 +485,8 @@ export default function CityScreen() {
           },
         ]}
       >
-        {/* Base grass tile - always rendered */}
-        <Image source={grassTile} style={styles.tile} />
+        {!building && <Image source={grassTile} style={styles.tile} />}
 
-        {/* Road sprite on top of grass if this is a road tile */}
         {isRoad && (
           <Image
             source={roadSprites[tileType]}
@@ -272,20 +494,38 @@ export default function CityScreen() {
           />
         )}
 
-        {/* Building sprite on top if this plot has a building */}
-        {hasBuilding && (
+        {building && (
           <Image
-            source={buildingSprites[plotIndex! % buildingSprites.length]}
+            source={getBuildingSprite(building)}
             style={styles.buildingSprite}
           />
         )}
+      </View>
+    );
+
+    if (isPlot) {
+      return (
+        <TouchableOpacity
+          key={`${row}-${col}`}
+          activeOpacity={0.7}
+          onPress={() => plotIndex !== null && handlePlotPress(plotIndex)}
+          style={{ position: "absolute", left: screenX, top: screenY, zIndex: zIndex + 1000 }}
+        >
+          <View style={styles.tileHitArea} />
+          {tileContent.props.children}
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <View key={`${row}-${col}`}>
+        {tileContent}
       </View>
     );
   };
 
   const renderGrid = () => {
     const tiles = [];
-    // Render in order for proper z-index layering (back to front)
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let c = 0; c < GRID_COLS; c++) {
         tiles.push(renderTile(r, c));
@@ -297,33 +537,44 @@ export default function CityScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Inner City</Text>
-        <Text style={styles.subtitle}>Build your city, one habit at a time</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.title}>Inner City</Text>
+            <Text style={styles.subtitle}>Build your city, one habit at a time</Text>
+          </View>
+          <View style={styles.tokenDisplay}>
+            <Text style={styles.tokenIcon}>🪙</Text>
+            <Text style={styles.tokenValue}>{tokens}</Text>
+          </View>
+        </View>
       </View>
 
       <View style={styles.cityViewport}>
-        <View
-          style={[
-            styles.gridContainer,
-            {
-              width: isoBounds.width,
-              height: isoBounds.height,
-            },
-          ]}
-        >
-          {renderGrid()}
-        </View>
+        <GestureDetector gesture={composedGesture}>
+          <Animated.View
+            style={[
+              styles.gridContainer,
+              {
+                width: isoBounds.width,
+                height: isoBounds.height,
+              },
+              animatedGridStyle,
+            ]}
+          >
+            {renderGrid()}
+          </Animated.View>
+        </GestureDetector>
       </View>
 
       <View style={styles.statsContainer}>
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{completedCount}</Text>
+            <Text style={styles.statNumber}>{buildingCount}</Text>
             <Text style={styles.statLabel}>Built</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{maxPlots}</Text>
-            <Text style={styles.statLabel}>Plots</Text>
+            <Text style={styles.statNumber}>{completedCount}</Text>
+            <Text style={styles.statLabel}>Today</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{habits.length}</Text>
@@ -331,14 +582,30 @@ export default function CityScreen() {
           </View>
         </View>
 
+        <TouchableOpacity style={styles.autoBuildButton} onPress={handleAutoBuild}>
+          <Text style={styles.autoBuildButtonText}>+ Auto Build</Text>
+        </TouchableOpacity>
+
         <Text style={styles.messageText}>
-          {completedCount === 0
-            ? "Complete habits to start building your city!"
-            : completedCount >= maxPlots - 2
+          {buildingCount === 0
+            ? "Tap an empty plot or use Auto Build to start!"
+            : buildingCount >= maxPlots - 2
             ? "Your city is thriving! Keep building to expand!"
-            : `${completedCount} building${completedCount !== 1 ? "s" : ""} constructed`}
+            : `Tap plots to build, tap buildings to upgrade`}
         </Text>
       </View>
+
+      <BuildingSheet
+        visible={sheetVisible}
+        onClose={handleSheetClose}
+        mode={sheetMode}
+        selectedBuilding={selectedBuilding}
+        tokens={tokens}
+        onSelectBuildingType={handleSelectBuildingType}
+        onUpgrade={handleUpgrade}
+        onAutoBuildOne={handleAutoBuildOne}
+        onAutoBuildAll={handleAutoBuildAll}
+      />
     </View>
   );
 }
@@ -346,12 +613,17 @@ export default function CityScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#E8ECEF",
+    backgroundColor: "#F9FAFB",
   },
   header: {
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 10,
+  },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   title: {
     fontSize: 28,
@@ -363,11 +635,28 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 2,
   },
+  tokenDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  tokenIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
+  tokenValue: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#92400E",
+  },
   cityViewport: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#87CEEB",
+    backgroundColor: "#9CA3AF",
   },
   gridContainer: {
     position: "relative",
@@ -376,6 +665,11 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: TILE_WIDTH,
     height: TILE_HEIGHT,
+  },
+  tileHitArea: {
+    width: TILE_WIDTH,
+    height: TILE_HEIGHT,
+    position: "absolute",
   },
   tile: {
     width: TILE_WIDTH,
@@ -390,7 +684,7 @@ const styles = StyleSheet.create({
   },
   buildingSprite: {
     position: "absolute",
-    top: 0,
+    top: -13,
     left: 0,
     width: TILE_WIDTH,
     height: TILE_HEIGHT,
@@ -422,6 +716,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginTop: 2,
+  },
+  autoBuildButton: {
+    backgroundColor: "#3B82F6",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  autoBuildButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
   },
   messageText: {
     fontSize: 14,

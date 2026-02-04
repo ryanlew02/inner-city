@@ -55,6 +55,22 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 
       CREATE INDEX IF NOT EXISTS idx_habit_entries_habit_date ON habit_entries(habit_id, date);
       CREATE INDEX IF NOT EXISTS idx_habit_entries_date ON habit_entries(date);
+
+      CREATE TABLE IF NOT EXISTS user_stats (
+        id TEXT PRIMARY KEY DEFAULT 'user',
+        tokens INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS placed_buildings (
+        id TEXT PRIMARY KEY,
+        plot_index INTEGER UNIQUE NOT NULL,
+        building_type TEXT NOT NULL,
+        tier INTEGER DEFAULT 1,
+        variant INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      INSERT OR IGNORE INTO user_stats (id, tokens) VALUES ('user', 0);
     `);
 
     isInitializing = false;

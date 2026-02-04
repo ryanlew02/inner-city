@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import "react-native-reanimated";
 
 import { HabitsProvider } from "../context/HabitsContext";
+import { BuildingProvider } from "../context/BuildingContext";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -20,16 +21,18 @@ export default function RootLayout() {
 
   return (
     <HabitsProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(drawer)" />
-        <Stack.Screen
-          name="habit-form"
-          options={{
-            presentation: "modal",
-            headerShown: false,
-          }}
-        />
-      </Stack>
+      <BuildingProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(drawer)" />
+          <Stack.Screen
+            name="habit-form"
+            options={{
+              presentation: "modal",
+              headerShown: false,
+            }}
+          />
+        </Stack>
+      </BuildingProvider>
     </HabitsProvider>
   );
 }

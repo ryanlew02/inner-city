@@ -63,3 +63,11 @@ export async function deleteEntryForHabit(habitId: string, date: string): Promis
     `DELETE FROM habit_entries WHERE habit_id = '${habitId}' AND date = '${date}'`
   );
 }
+
+export async function getTotalCompletedCount(): Promise<number> {
+  const db = await getDatabase();
+  const result = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM habit_entries WHERE value > 0`
+  );
+  return result?.count ?? 0;
+}

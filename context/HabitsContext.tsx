@@ -4,6 +4,7 @@ import { Habit, HabitEntry, parseScheduleJson, isScheduledForToday, isScheduledF
 import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb } from "../services/database/habitService";
 import { getEntriesForDate, upsertEntry, deleteEntryForHabit } from "../services/database/entryService";
 import { generateUUID } from "../services/database/db";
+import { addTokens as addTokensDb } from "../services/database/tokenService";
 
 type HabitsContextType = {
   habits: Habit[];
@@ -23,6 +24,8 @@ type HabitsContextType = {
   viewingDate: string;
   setViewingDate: (date: string) => void;
   isViewingToday: boolean;
+  onTokenEarned?: () => void;
+  setOnTokenEarned: (callback: (() => void) | undefined) => void;
 };
 
 const HabitsContext = createContext<HabitsContextType | null>(null);
@@ -38,6 +41,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(getTodayDate());
   const [viewingDate, setViewingDateState] = useState(getTodayDate());
+  const [onTokenEarned, setOnTokenEarned] = useState<(() => void) | undefined>(undefined);
   const useInMemory = useRef(false);
   const appState = useRef(AppState.currentState);
 
@@ -105,7 +109,6 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Failed to load habits data, using in-memory fallback:', error);
       useInMemory.current = true;
-      // Start with empty state when database fails
     } finally {
       setLoading(false);
     }
@@ -147,11 +150,11 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
 
-    const isCompleted = isHabitCompleted(id);
+    const wasCompleted = isHabitCompleted(id);
+    const existingEntry = entries.get(id);
 
     if (useInMemory.current) {
-      // In-memory fallback
-      if (isCompleted) {
+      if (wasCompleted) {
         setEntries(prev => {
           const newMap = new Map(prev);
           newMap.delete(id);
@@ -171,12 +174,15 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           newMap.set(id, newEntry);
           return newMap;
         });
+        if (!existingEntry || existingEntry.value === 0) {
+          onTokenEarned?.();
+        }
       }
       return;
     }
 
     try {
-      if (isCompleted) {
+      if (wasCompleted) {
         await deleteEntryForHabit(id, currentDate);
         setEntries(prev => {
           const newMap = new Map(prev);
@@ -195,6 +201,10 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           newMap.set(id, newEntry);
           return newMap;
         });
+        if (!existingEntry || existingEntry.value === 0) {
+          await addTokensDb(1);
+          onTokenEarned?.();
+        }
       }
     } catch (error) {
       console.error('Failed to toggle habit:', error);
@@ -202,8 +212,11 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   };
 
   const updateEntryValue = async (habitId: string, value: number): Promise<void> => {
+    const habit = habits.find(h => h.id === habitId);
+    const existingEntry = entries.get(habitId);
+    const wasCompleted = habit ? isHabitCompleted(habitId) : false;
+
     if (value <= 0) {
-      // If value is 0 or negative, delete the entry
       if (useInMemory.current) {
         setEntries(prev => {
           const newMap = new Map(prev);
@@ -227,7 +240,6 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     }
 
     if (useInMemory.current) {
-      const existingEntry = entries.get(habitId);
       const newEntry: HabitEntry = existingEntry
         ? { ...existingEntry, value }
         : {
@@ -243,6 +255,12 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         newMap.set(habitId, newEntry);
         return newMap;
       });
+      if (!wasCompleted && habit) {
+        const targetValue = habit.target_value;
+        if (value >= targetValue) {
+          onTokenEarned?.();
+        }
+      }
       return;
     }
 
@@ -258,6 +276,13 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         newMap.set(habitId, newEntry);
         return newMap;
       });
+      if (!wasCompleted && habit) {
+        const targetValue = habit.target_value;
+        if (value >= targetValue) {
+          await addTokensDb(1);
+          onTokenEarned?.();
+        }
+      }
     } catch (error) {
       console.error('Failed to update entry value:', error);
     }
@@ -344,6 +369,8 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       viewingDate,
       setViewingDate,
       isViewingToday,
+      onTokenEarned,
+      setOnTokenEarned,
     }}>
       {children}
     </HabitsContext.Provider>
