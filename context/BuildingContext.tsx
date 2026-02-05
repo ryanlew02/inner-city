@@ -11,6 +11,14 @@ import {
   getUpgradeCost,
   PURCHASABLE_BUILDING_TYPES,
   MAX_VARIANTS,
+  BUILDING_SIZES,
+  getBuildingSize,
+  canPlaceBuilding,
+  findBuildingAtPlot,
+  getOccupiedPlots,
+  clearAllBuildings as clearAllBuildingsDb,
+  findValidAnchorForBuilding,
+  plotIndexToGridPosition,
 } from "../services/database/buildingService";
 import {
   getTokenCount,
@@ -23,14 +31,15 @@ type BuildingContextType = {
   buildings: PlacedBuilding[];
   tokens: number;
   loading: boolean;
-  placeBuilding: (plotIndex: number, buildingType: BuildingType) => Promise<boolean>;
-  autoBuildBuilding: (buildingType: BuildingType, maxPlots: number) => Promise<boolean>;
+  placeBuilding: (plotIndex: number, buildingType: BuildingType, gridRows: number, gridCols: number) => Promise<boolean>;
+  autoBuildBuilding: (buildingType: BuildingType, maxPlots: number, gridRows: number, gridCols: number) => Promise<boolean>;
   upgradeBuilding: (buildingId: string) => Promise<boolean>;
-  getBuildingAtPlot: (plotIndex: number) => PlacedBuilding | undefined;
+  getBuildingAtPlot: (plotIndex: number, gridRows: number, gridCols: number) => PlacedBuilding | undefined;
   canAffordBuilding: () => boolean;
   canAffordUpgrade: (currentTier: number) => boolean;
   addTokens: (amount: number) => Promise<void>;
   refreshTokens: () => Promise<void>;
+  resetCity: () => Promise<void>;
 };
 
 const BuildingContext = createContext<BuildingContextType | null>(null);
@@ -40,6 +49,13 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokens] = useState(0);
   const [loading, setLoading] = useState(true);
   const useInMemory = useRef(false);
+  const buildingsRef = useRef<PlacedBuilding[]>([]); // Always-current buildings for validation
+
+  // Keep ref in sync with state
+  const updateBuildings = (newBuildings: PlacedBuilding[]) => {
+    buildingsRef.current = newBuildings;
+    setBuildings(newBuildings);
+  };
 
   useEffect(() => {
     loadData();
@@ -51,7 +67,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
         getPlacedBuildings(),
         getTokenCount(),
       ]);
-      setBuildings(loadedBuildings);
+      updateBuildings(loadedBuildings);
       setTokens(loadedTokens);
     } catch (error) {
       console.error('Failed to load building data, using in-memory fallback:', error);
@@ -92,15 +108,20 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
     return cost > 0 && tokens >= cost;
   };
 
-  const getBuildingAtPlot = (plotIndex: number): PlacedBuilding | undefined => {
-    return buildings.find(b => b.plot_index === plotIndex);
+  const getBuildingAtPlot = (plotIndex: number, gridRows: number, gridCols: number): PlacedBuilding | undefined => {
+    return findBuildingAtPlot(plotIndex, buildingsRef.current, gridRows, gridCols);
   };
 
-  const placeBuilding = async (plotIndex: number, buildingType: BuildingType): Promise<boolean> => {
+  const placeBuilding = async (plotIndex: number, buildingType: BuildingType, gridRows: number, gridCols: number): Promise<boolean> => {
     if (!canAffordBuilding()) return false;
 
-    const existingBuilding = getBuildingAtPlot(plotIndex);
-    if (existingBuilding) return false;
+    const size = getBuildingSize(buildingType);
+
+    // Find valid anchor for this building using current ref (not stale state)
+    const anchorPlot = findValidAnchorForBuilding(plotIndex, buildingType, buildingsRef.current, gridRows, gridCols);
+    if (anchorPlot === null) {
+      return false;
+    }
 
     const variant = Math.floor(Math.random() * MAX_VARIANTS[buildingType]) + 1;
 
@@ -110,13 +131,16 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
         setTokens(prev => prev - BUILDING_COST);
         const newBuilding: PlacedBuilding = {
           id: generateUUID(),
-          plot_index: plotIndex,
+          plot_index: anchorPlot,
           building_type: buildingType,
           tier: 1,
           variant,
+          size_x: size.x,
+          size_y: size.y,
           created_at: Date.now(),
         };
-        setBuildings(prev => [...prev, newBuilding].sort((a, b) => a.plot_index - b.plot_index));
+        const newBuildings = [...buildingsRef.current, newBuilding].sort((a, b) => a.plot_index - b.plot_index);
+        updateBuildings(newBuildings);
       }
       return success;
     }
@@ -125,8 +149,9 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       const spent = await spendTokensDb(BUILDING_COST);
       if (!spent) return false;
 
-      const newBuilding = await placeBuildingDb(plotIndex, buildingType, variant);
-      setBuildings(prev => [...prev, newBuilding].sort((a, b) => a.plot_index - b.plot_index));
+      const newBuilding = await placeBuildingDb(anchorPlot, buildingType, variant);
+      const newBuildings = [...buildingsRef.current, newBuilding].sort((a, b) => a.plot_index - b.plot_index);
+      updateBuildings(newBuildings);
       setTokens(prev => prev - BUILDING_COST);
       return true;
     } catch (error) {
@@ -135,26 +160,33 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const autoBuildBuilding = async (buildingType: BuildingType, maxPlots: number): Promise<boolean> => {
+  const autoBuildBuilding = async (buildingType: BuildingType, maxPlots: number, gridRows: number, gridCols: number): Promise<boolean> => {
     if (!canAffordBuilding()) return false;
 
+    const size = getBuildingSize(buildingType);
+
     if (useInMemory.current) {
-      const occupiedPlots = new Set(buildings.map(b => b.plot_index));
-      let nextPlot: number | null = null;
+      // Find valid plots using current ref, preferring "bottom" plots to avoid road overlap
+      const validPlots: { plotIndex: number; priority: number }[] = [];
       for (let i = 0; i < maxPlots; i++) {
-        if (!occupiedPlots.has(i)) {
-          nextPlot = i;
-          break;
+        if (canPlaceBuilding(i, size.x, size.y, buildingsRef.current, gridRows, gridCols)) {
+          const pos = plotIndexToGridPosition(i, gridRows, gridCols);
+          if (pos) {
+            const rowInBlock = pos.row % 3;
+            const priority = rowInBlock === 2 ? 0 : 1;
+            validPlots.push({ plotIndex: i, priority });
+          }
         }
       }
-      if (nextPlot === null) return false;
-      return placeBuilding(nextPlot, buildingType);
+      if (validPlots.length === 0) return false;
+      validPlots.sort((a, b) => a.priority - b.priority || a.plotIndex - b.plotIndex);
+      return placeBuilding(validPlots[0].plotIndex, buildingType, gridRows, gridCols);
     }
 
     try {
-      const nextPlot = await getNextAvailablePlotIndex(maxPlots);
+      const nextPlot = await getNextAvailablePlotIndex(maxPlots, buildingType, gridRows, gridCols);
       if (nextPlot === null) return false;
-      return placeBuilding(nextPlot, buildingType);
+      return placeBuilding(nextPlot, buildingType, gridRows, gridCols);
     } catch (error) {
       console.error('Failed to auto-build:', error);
       return false;
@@ -162,7 +194,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
   };
 
   const upgradeBuilding = async (buildingId: string): Promise<boolean> => {
-    const building = buildings.find(b => b.id === buildingId);
+    const building = buildingsRef.current.find(b => b.id === buildingId);
     if (!building || building.tier >= 3) return false;
 
     const cost = getUpgradeCost(building.tier);
@@ -170,11 +202,10 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
 
     if (useInMemory.current) {
       setTokens(prev => prev - cost);
-      setBuildings(prev =>
-        prev.map(b =>
-          b.id === buildingId ? { ...b, tier: b.tier + 1 } : b
-        )
+      const newBuildings = buildingsRef.current.map(b =>
+        b.id === buildingId ? { ...b, tier: b.tier + 1 } : b
       );
+      updateBuildings(newBuildings);
       return true;
     }
 
@@ -185,16 +216,29 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       const upgraded = await upgradeBuildingDb(buildingId);
       if (!upgraded) return false;
 
-      setBuildings(prev =>
-        prev.map(b =>
-          b.id === buildingId ? { ...b, tier: upgraded.tier } : b
-        )
+      const newBuildings = buildingsRef.current.map(b =>
+        b.id === buildingId ? { ...b, tier: upgraded.tier } : b
       );
+      updateBuildings(newBuildings);
       setTokens(prev => prev - cost);
       return true;
     } catch (error) {
       console.error('Failed to upgrade building:', error);
       return false;
+    }
+  };
+
+  const resetCity = async (): Promise<void> => {
+    if (useInMemory.current) {
+      updateBuildings([]);
+      return;
+    }
+
+    try {
+      await clearAllBuildingsDb();
+      updateBuildings([]);
+    } catch (error) {
+      console.error('Failed to reset city:', error);
     }
   };
 
@@ -212,6 +256,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
         canAffordUpgrade,
         addTokens,
         refreshTokens,
+        resetCity,
       }}
     >
       {children}

@@ -4,12 +4,84 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import BuildingSheet from "../components/BuildingSheet";
 import { BuildingType, PlacedBuilding, PURCHASABLE_BUILDING_TYPES, useBuildings } from "../context/BuildingContext";
+import { BUILDING_SIZES } from "../services/database/buildingService";
 import { useHabits } from "../context/HabitsContext";
 
 // Isometric tile dimensions
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 64;
-const ISO_TILE_HEIGHT = 32;
+// Vertical step for isometric grid - controls how much tiles overlap vertically
+// 32 was too close (tiles overlapped wrong), 48 was too far (gaps)
+const ISO_TILE_HEIGHT = 38;
+
+// Building sprite dimensions based on asset sizes and footprint
+// Asset dimensions: 1x1=512x1024, 1x2=768x1024, 2x2=1024x1280
+// Display dimensions scaled to fit tile grid
+// For multi-tile buildings, we render from the BOTTOM-RIGHT tile of the footprint
+// so the sprite extends up and left (into the block, away from roads)
+const BUILDING_SPRITE_SIZES: Record<string, { width: number; height: number; offsetX: number; offsetY: number }> = {
+  "1x1": { width: 64, height: 128, offsetX: 0, offsetY: -64 },     // Render at anchor, extends up
+  "1x2": { width: 96, height: 128, offsetX: -32, offsetY: -90 },   // Render at bottom tile, extends up-left
+  "2x2": { width: 128, height: 160, offsetX: -64, offsetY: -122 }, // Render at bottom-right tile, extends up-left
+};
+
+function getBuildingSpriteStyle(building: PlacedBuilding): { width: number; height: number; top: number; left: number } {
+  const sizeKey = `${building.size_x}x${building.size_y}`;
+  const size = BUILDING_SPRITE_SIZES[sizeKey] || BUILDING_SPRITE_SIZES["1x1"];
+  return {
+    width: size.width,
+    height: size.height,
+    top: size.offsetY,
+    left: size.offsetX,
+  };
+}
+
+// For multi-tile buildings, determine which tile should render the sprite
+// 1x1: render at anchor
+// 1x2: render at bottom tile (anchor.row + 1)
+// 2x2: render at bottom-right tile (anchor.row + 1, anchor.col + 1)
+function getBuildingRenderTile(building: PlacedBuilding, gridRows: number, gridCols: number): number | null {
+  if (building.size_x === 1 && building.size_y === 1) {
+    return building.plot_index;
+  }
+
+  // Import helper to convert plot index to grid position
+  const anchorPos = plotIndexToGridPositionLocal(building.plot_index, gridRows, gridCols);
+  if (!anchorPos) return null;
+
+  // Calculate bottom-right tile position
+  const renderRow = anchorPos.row + building.size_y - 1;
+  const renderCol = anchorPos.col + building.size_x - 1;
+
+  return gridPositionToPlotIndexLocal(renderRow, renderCol, gridRows, gridCols);
+}
+
+// Local helper functions (duplicated from buildingService to avoid circular deps)
+function plotIndexToGridPositionLocal(plotIndex: number, gridRows: number, gridCols: number): { row: number; col: number } | null {
+  let count = 0;
+  for (let r = 0; r < gridRows; r++) {
+    for (let c = 0; c < gridCols; c++) {
+      if (getGridTileType(r, c, gridRows, gridCols) === "plot") {
+        if (count === plotIndex) return { row: r, col: c };
+        count++;
+      }
+    }
+  }
+  return null;
+}
+
+function gridPositionToPlotIndexLocal(row: number, col: number, gridRows: number, gridCols: number): number | null {
+  if (getGridTileType(row, col, gridRows, gridCols) !== "plot") return null;
+
+  let index = 0;
+  for (let r = 0; r < gridRows; r++) {
+    for (let c = 0; c < gridCols; c++) {
+      if (r === row && c === col) return index;
+      if (getGridTileType(r, c, gridRows, gridCols) === "plot") index++;
+    }
+  }
+  return null;
+}
 
 // Tile types
 type TileType = "plot" | "road_h" | "road_v" | "road_cross" | "road_corner_nw" | "road_corner_ne" | "road_corner_sw" | "road_corner_se" | "road_t_north" | "road_t_south" | "road_t_east" | "road_t_west";
@@ -49,20 +121,23 @@ function getCitySize(buildingCount: number): CitySize {
   };
 }
 
-const grassTile = require("../assets/sprites/ground/emptytile.png");
+const grassTile = require("../assets/Tiles/Grass.png");
 
+// Road tiles mapping - new asset pack
+// Tile1=cross, Tile2=straight NW-SE, Tile7=straight NE-SW
+// Tile3=corner NE, Tile4=corner SE, Tile5=corner NW, Tile6=corner SW
 const roadSprites: Record<string, ImageSourcePropType> = {
-  road_h: require("../assets/sprites/ground/road_straight2.png"),
-  road_v: require("../assets/sprites/ground/road_straight.png"),
-  road_cross: require("../assets/sprites/ground/road_cross.png"),
-  road_corner_nw: require("../assets/sprites/ground/road_corner_sw_se.png"),
-  road_corner_ne: require("../assets/sprites/ground/road_corner_nw_sw.png"),
-  road_corner_sw: require("../assets/sprites/ground/road_corner_ne_se.png"),
-  road_corner_se: require("../assets/sprites/ground/road_corner_nw_ne.png"),
-  road_t_north: require("../assets/sprites/ground/road_t_missing_sw.png"),
-  road_t_south: require("../assets/sprites/ground/road_t_missing_ne.png"),
-  road_t_east: require("../assets/sprites/ground/road_t_missing_nw.png"),
-  road_t_west: require("../assets/sprites/ground/road_t_missing_se.png"),
+  road_h: require("../assets/Tiles/Road_Tile7.png"),     // Straight NE-SW (horizontal in grid)
+  road_v: require("../assets/Tiles/Road_Tile2.png"),     // Straight NW-SE (vertical in grid)
+  road_cross: require("../assets/Tiles/Road_Tile1.png"), // 4-way intersection
+  road_corner_nw: require("../assets/Tiles/Road_Tile5.png"), // Corner: N to W
+  road_corner_ne: require("../assets/Tiles/Road_Tile3.png"), // Corner: N to E
+  road_corner_sw: require("../assets/Tiles/Road_Tile6.png"), // Corner: S to W
+  road_corner_se: require("../assets/Tiles/Road_Tile4.png"), // Corner: S to E
+  road_t_north: require("../assets/Tiles/Road_Tile1.png"),   // T-junction (using cross as fallback)
+  road_t_south: require("../assets/Tiles/Road_Tile1.png"),   // T-junction (using cross as fallback)
+  road_t_east: require("../assets/Tiles/Road_Tile1.png"),    // T-junction (using cross as fallback)
+  road_t_west: require("../assets/Tiles/Road_Tile1.png"),    // T-junction (using cross as fallback)
 };
 
 function isRoadTile(tileType: TileType): boolean {
@@ -70,148 +145,236 @@ function isRoadTile(tileType: TileType): boolean {
 }
 
 // Building sprites organized by type, tier, and variant
-// For types without tier2/3 sprites, we'll fall back to tier1
+// New asset structure uses different folders and naming conventions
 const buildingSpriteMap: Record<string, ImageSourcePropType> = {
-  // Residential - has all tiers
-  "residential_1_1": require("../assets/sprites/buildings/residential_tier1_1.png"),
-  "residential_1_2": require("../assets/sprites/buildings/residential_tier1_2.png"),
-  "residential_1_3": require("../assets/sprites/buildings/residential_tier1_3.png"),
-  "residential_1_4": require("../assets/sprites/buildings/residential_tier1_4.png"),
-  "residential_1_5": require("../assets/sprites/buildings/residential_tier1_5.png"),
-  "residential_1_6": require("../assets/sprites/buildings/residential_tier1_6.png"),
-  "residential_1_7": require("../assets/sprites/buildings/residential_tier1_7.png"),
-  "residential_1_8": require("../assets/sprites/buildings/residential_tier1_8.png"),
-  "residential_2_1": require("../assets/sprites/buildings/residential_tier2_1.png"),
-  "residential_2_2": require("../assets/sprites/buildings/residential_tier2_2.png"),
-  "residential_2_3": require("../assets/sprites/buildings/residential_tier2_3.png"),
-  "residential_2_4": require("../assets/sprites/buildings/residential_tier2_4.png"),
-  "residential_2_5": require("../assets/sprites/buildings/residential_tier2_5.png"),
-  "residential_2_6": require("../assets/sprites/buildings/residential_tier2_6.png"),
-  "residential_2_7": require("../assets/sprites/buildings/residential_tier2_7.png"),
-  "residential_2_8": require("../assets/sprites/buildings/residential_tier2_8.png"),
-  "residential_3_1": require("../assets/sprites/buildings/residential_tier3_1.png"),
-  "residential_3_2": require("../assets/sprites/buildings/residential_tier3_2.png"),
-  "residential_3_3": require("../assets/sprites/buildings/residential_tier3_3.png"),
-  "residential_3_4": require("../assets/sprites/buildings/residential_tier3_4.png"),
-  "residential_3_5": require("../assets/sprites/buildings/residential_tier3_5.png"),
-  "residential_3_6": require("../assets/sprites/buildings/residential_tier3_6.png"),
-  "residential_3_7": require("../assets/sprites/buildings/residential_tier3_7.png"),
-  "residential_3_8": require("../assets/sprites/buildings/residential_tier3_8.png"),
-  // Office - has all tiers
-  "office_1_1": require("../assets/sprites/buildings/office_tier1_1.png"),
-  "office_1_2": require("../assets/sprites/buildings/office_tier1_2.png"),
-  "office_1_3": require("../assets/sprites/buildings/office_tier1_3.png"),
-  "office_1_4": require("../assets/sprites/buildings/office_tier1_4.png"),
-  "office_1_5": require("../assets/sprites/buildings/office_tier1_5.png"),
-  "office_1_6": require("../assets/sprites/buildings/office_tier1_6.png"),
-  "office_1_7": require("../assets/sprites/buildings/office_tier1_7.png"),
-  "office_1_8": require("../assets/sprites/buildings/office_tier1_8.png"),
-  "office_2_1": require("../assets/sprites/buildings/office_tier2_1.png"),
-  "office_2_2": require("../assets/sprites/buildings/office_tier2_2.png"),
-  "office_2_3": require("../assets/sprites/buildings/office_tier2_3.png"),
-  "office_2_4": require("../assets/sprites/buildings/office_tier2_4.png"),
-  "office_2_5": require("../assets/sprites/buildings/office_tier2_5.png"),
-  "office_2_6": require("../assets/sprites/buildings/office_tier2_6.png"),
-  "office_2_7": require("../assets/sprites/buildings/office_tier2_7.png"),
-  "office_2_8": require("../assets/sprites/buildings/office_tier2_8.png"),
-  "office_3_1": require("../assets/sprites/buildings/office_tier3_1.png"),
-  "office_3_2": require("../assets/sprites/buildings/office_tier3_2.png"),
-  "office_3_3": require("../assets/sprites/buildings/office_tier3_3.png"),
-  "office_3_4": require("../assets/sprites/buildings/office_tier3_4.png"),
-  "office_3_5": require("../assets/sprites/buildings/office_tier3_5.png"),
-  "office_3_6": require("../assets/sprites/buildings/office_tier3_6.png"),
-  "office_3_7": require("../assets/sprites/buildings/office_tier3_7.png"),
-  "office_3_8": require("../assets/sprites/buildings/office_tier3_8.png"),
-  // Shop - tier 1 only
-  "shop_1_1": require("../assets/sprites/buildings/shop_tier1_1.png"),
-  "shop_1_2": require("../assets/sprites/buildings/shop_tier1_2.png"),
-  "shop_1_3": require("../assets/sprites/buildings/shop_tier1_3.png"),
-  "shop_1_4": require("../assets/sprites/buildings/shop_tier1_4.png"),
-  "shop_1_5": require("../assets/sprites/buildings/shop_tier1_5.png"),
-  "shop_1_6": require("../assets/sprites/buildings/shop_tier1_6.png"),
-  "shop_1_7": require("../assets/sprites/buildings/shop_tier1_7.png"),
-  "shop_1_8": require("../assets/sprites/buildings/shop_tier1_8.png"),
-  // Cafe - tier 1 only
-  "cafe_1_1": require("../assets/sprites/buildings/cafe_tier1_1.png"),
-  "cafe_1_2": require("../assets/sprites/buildings/cafe_tier1_2.png"),
-  "cafe_1_3": require("../assets/sprites/buildings/cafe_tier1_3.png"),
-  "cafe_1_4": require("../assets/sprites/buildings/cafe_tier1_4.png"),
-  "cafe_1_5": require("../assets/sprites/buildings/cafe_tier1_5.png"),
-  "cafe_1_6": require("../assets/sprites/buildings/cafe_tier1_6.png"),
-  "cafe_1_7": require("../assets/sprites/buildings/cafe_tier1_7.png"),
-  "cafe_1_8": require("../assets/sprites/buildings/cafe_tier1_8.png"),
-  // Restaurant - tier 1 only
-  "restaurant_1_1": require("../assets/sprites/buildings/restaurant_tier1_1.png"),
-  "restaurant_1_2": require("../assets/sprites/buildings/restaurant_tier1_2.png"),
-  "restaurant_1_3": require("../assets/sprites/buildings/restaurant_tier1_3.png"),
-  "restaurant_1_4": require("../assets/sprites/buildings/restaurant_tier1_4.png"),
-  "restaurant_1_5": require("../assets/sprites/buildings/restaurant_tier1_5.png"),
-  "restaurant_1_6": require("../assets/sprites/buildings/restaurant_tier1_6.png"),
-  "restaurant_1_7": require("../assets/sprites/buildings/restaurant_tier1_7.png"),
-  "restaurant_1_8": require("../assets/sprites/buildings/restaurant_tier1_8.png"),
-  // Factory - tier 1 only
-  "factory_1_1": require("../assets/sprites/buildings/factory_tier1_1.png"),
-  "factory_1_2": require("../assets/sprites/buildings/factory_tier1_2.png"),
-  "factory_1_3": require("../assets/sprites/buildings/factory_tier1_3.png"),
-  "factory_1_4": require("../assets/sprites/buildings/factory_tier1_4.png"),
-  "factory_1_5": require("../assets/sprites/buildings/factory_tier1_5.png"),
-  "factory_1_6": require("../assets/sprites/buildings/factory_tier1_6.png"),
-  "factory_1_7": require("../assets/sprites/buildings/factory_tier1_7.png"),
-  "factory_1_8": require("../assets/sprites/buildings/factory_tier1_8.png"),
-  // Hospital - tier 1 only
-  "hospital_1_1": require("../assets/sprites/buildings/hospital_tier1_1.png"),
-  "hospital_1_2": require("../assets/sprites/buildings/hospital_tier1_2.png"),
-  "hospital_1_3": require("../assets/sprites/buildings/hospital_tier1_3.png"),
-  "hospital_1_4": require("../assets/sprites/buildings/hospital_tier1_4.png"),
-  "hospital_1_5": require("../assets/sprites/buildings/hospital_tier1_5.png"),
-  "hospital_1_6": require("../assets/sprites/buildings/hospital_tier1_6.png"),
-  "hospital_1_7": require("../assets/sprites/buildings/hospital_tier1_7.png"),
-  "hospital_1_8": require("../assets/sprites/buildings/hospital_tier1_8.png"),
-  // School - tier 1 only
-  "school_1_1": require("../assets/sprites/buildings/school_tier1_1.png"),
-  "school_1_2": require("../assets/sprites/buildings/school_tier1_2.png"),
-  "school_1_3": require("../assets/sprites/buildings/school_tier1_3.png"),
-  "school_1_4": require("../assets/sprites/buildings/school_tier1_4.png"),
-  "school_1_5": require("../assets/sprites/buildings/school_tier1_5.png"),
-  "school_1_6": require("../assets/sprites/buildings/school_tier1_6.png"),
-  "school_1_7": require("../assets/sprites/buildings/school_tier1_7.png"),
-  "school_1_8": require("../assets/sprites/buildings/school_tier1_8.png"),
-  // Hotel - tier 1 only
-  "hotel_1_1": require("../assets/sprites/buildings/hotel_tier1_1.png"),
-  "hotel_1_2": require("../assets/sprites/buildings/hotel_tier1_2.png"),
-  "hotel_1_3": require("../assets/sprites/buildings/hotel_tier1_3.png"),
-  "hotel_1_4": require("../assets/sprites/buildings/hotel_tier1_4.png"),
-  "hotel_1_5": require("../assets/sprites/buildings/hotel_tier1_5.png"),
-  "hotel_1_6": require("../assets/sprites/buildings/hotel_tier1_6.png"),
-  "hotel_1_7": require("../assets/sprites/buildings/hotel_tier1_7.png"),
-  "hotel_1_8": require("../assets/sprites/buildings/hotel_tier1_8.png"),
-  // Powerplant - tier 1 only
-  "powerplant_1_1": require("../assets/sprites/buildings/powerplant_tier1_1.png"),
-  "powerplant_1_2": require("../assets/sprites/buildings/powerplant_tier1_2.png"),
-  "powerplant_1_3": require("../assets/sprites/buildings/powerplant_tier1_3.png"),
-  "powerplant_1_4": require("../assets/sprites/buildings/powerplant_tier1_4.png"),
-  "powerplant_1_5": require("../assets/sprites/buildings/powerplant_tier1_5.png"),
-  "powerplant_1_6": require("../assets/sprites/buildings/powerplant_tier1_6.png"),
-  "powerplant_1_7": require("../assets/sprites/buildings/powerplant_tier1_7.png"),
-  "powerplant_1_8": require("../assets/sprites/buildings/powerplant_tier1_8.png"),
-  // Warehouse - tier 1 only
-  "warehouse_1_1": require("../assets/sprites/buildings/warehouse_tier1_1.png"),
-  "warehouse_1_2": require("../assets/sprites/buildings/warehouse_tier1_2.png"),
-  "warehouse_1_3": require("../assets/sprites/buildings/warehouse_tier1_3.png"),
-  "warehouse_1_4": require("../assets/sprites/buildings/warehouse_tier1_4.png"),
-  "warehouse_1_5": require("../assets/sprites/buildings/warehouse_tier1_5.png"),
-  "warehouse_1_6": require("../assets/sprites/buildings/warehouse_tier1_6.png"),
-  "warehouse_1_7": require("../assets/sprites/buildings/warehouse_tier1_7.png"),
-  "warehouse_1_8": require("../assets/sprites/buildings/warehouse_tier1_8.png"),
-  // Special - tier 1 only
-  "special_1_1": require("../assets/sprites/buildings/special_tier1_1.png"),
-  "special_1_2": require("../assets/sprites/buildings/special_tier1_2.png"),
-  "special_1_3": require("../assets/sprites/buildings/special_tier1_3.png"),
-  "special_1_4": require("../assets/sprites/buildings/special_tier1_4.png"),
-  "special_1_5": require("../assets/sprites/buildings/special_tier1_5.png"),
-  "special_1_6": require("../assets/sprites/buildings/special_tier1_6.png"),
-  "special_1_7": require("../assets/sprites/buildings/special_tier1_7.png"),
-  "special_1_8": require("../assets/sprites/buildings/special_tier1_8.png"),
+  // Residential - Houses for tier 1, Apartments for tier 2-3
+  // Tier 1: Small houses from Houses/ folder (different colors)
+  "residential_1_1": require("../assets/Houses/Blue/House_Type1.png"),
+  "residential_1_2": require("../assets/Houses/Brown/House_Type2.png"),
+  "residential_1_3": require("../assets/Houses/Green/House_Type3.png"),
+  "residential_1_4": require("../assets/Houses/Grey/House_Type4.png"),
+  "residential_1_5": require("../assets/Houses/Pink/House_Type5.png"),
+  "residential_1_6": require("../assets/Houses/Red/House_Type6.png"),
+  "residential_1_7": require("../assets/Houses/Yellow/House_Type7.png"),
+  "residential_1_8": require("../assets/Houses/Blue/House_Type8.png"),
+  // Tier 2: Apartments Level 1 (1x1 size)
+  "residential_2_1": require("../assets/Appartments/Appartment_Blue_1x1_Level1.png"),
+  "residential_2_2": require("../assets/Appartments/Appartment_Green_1x1_Level1.png"),
+  "residential_2_3": require("../assets/Appartments/Appartment_Grey_1x1_Level1.png"),
+  "residential_2_4": require("../assets/Appartments/Appartment_Pink_1x1_Level1.png"),
+  "residential_2_5": require("../assets/Appartments/Appartment_Red_1x1_Level1.png"),
+  "residential_2_6": require("../assets/Appartments/Appartment_Yellow_1x1_Level1.png"),
+  "residential_2_7": require("../assets/Appartments/Appartment_Blue_1x2_Level1.png"),
+  "residential_2_8": require("../assets/Appartments/Appartment_Green_1x2_Level1.png"),
+  // Tier 3: Apartments Level 3 (larger buildings)
+  "residential_3_1": require("../assets/Appartments/Appartment_Blue_1x1_Level3.png"),
+  "residential_3_2": require("../assets/Appartments/Appartment_Green_1x1_Level3.png"),
+  "residential_3_3": require("../assets/Appartments/Appartment_Grey_1x1_Level3.png"),
+  "residential_3_4": require("../assets/Appartments/Appartment_Pink_1x1_Level3.png"),
+  "residential_3_5": require("../assets/Appartments/Appartment_Red_1x1_Level3.png"),
+  "residential_3_6": require("../assets/Appartments/Appartment_Yellow_1x1_Level3.png"),
+  "residential_3_7": require("../assets/Appartments/Appartment_Blue_2x2_Level3.png"),
+  "residential_3_8": require("../assets/Appartments/Appartment_Green_2x2_Level3.png"),
+
+  // Shop - Various shop types from Shopping/
+  "shop_1_1": require("../assets/Shopping/Shop_Butcher_OneFloor.png"),
+  "shop_1_2": require("../assets/Shopping/Shop_Clothing_OneFloor.png"),
+  "shop_1_3": require("../assets/Shopping/Shop_Fish_OneFloor.png"),
+  "shop_1_4": require("../assets/Shopping/Shop_Flowers_OneFloor.png"),
+  "shop_1_5": require("../assets/Shopping/Shop_Music_OneFloor.png"),
+  "shop_1_6": require("../assets/Shopping/Shop_Pets_OneFloor.png"),
+  "shop_1_7": require("../assets/Shopping/Shop_Pharmacy_OneFloor.png"),
+  "shop_1_8": require("../assets/Shopping/Shop_Tools_OneFloor.png"),
+  // Tier 2: One floor roofed shops
+  "shop_2_1": require("../assets/Shopping/Shop_Butcher_OneFloorRoofed.png"),
+  "shop_2_2": require("../assets/Shopping/Shop_Clothing_OneFloorRoofed.png"),
+  "shop_2_3": require("../assets/Shopping/Shop_Fish_OneFloorRoofed.png"),
+  "shop_2_4": require("../assets/Shopping/Shop_Flowers_OneFloorRoofed.png"),
+  "shop_2_5": require("../assets/Shopping/Shop_Music_OneFloorRoofed.png"),
+  "shop_2_6": require("../assets/Shopping/Shop_Pets_OneFloorRoofed.png"),
+  "shop_2_7": require("../assets/Shopping/Shop_Pharmacy_OneFloorRoofed.png"),
+  "shop_2_8": require("../assets/Shopping/Shop_Tools_OneFloorRoofed.png"),
+  // Tier 3: Two floor roofed shops
+  "shop_3_1": require("../assets/Shopping/Shop_Butcher_TwoFloorsRoofed.png"),
+  "shop_3_2": require("../assets/Shopping/Shop_Butcher_TwoFloors.png"),
+  "shop_3_3": require("../assets/Shopping/Shop_Fish_TwoFloorsRoofed.png"),
+  "shop_3_4": require("../assets/Shopping/Shop_Flowers_TwoFloorsRoofed.png"),
+  "shop_3_5": require("../assets/Shopping/Shop_Music_TwoFloorsRoofed.png"),
+  "shop_3_6": require("../assets/Shopping/Shop_Pets_TwoFloorsRoofed.png"),
+  "shop_3_7": require("../assets/Shopping/Shop_Pharmacy_TwoFloorsRoofed.png"),
+  "shop_3_8": require("../assets/Shopping/Shop_Tools_TwoFloorsRoofed.png"),
+
+  // Office - Workplace buildings from Shopping/
+  "office_1_1": require("../assets/Shopping/Workplace_Dentist_OneFloor.png"),
+  "office_1_2": require("../assets/Shopping/Workplace_Electrician_OneFloor.png"),
+  "office_1_3": require("../assets/Shopping/Workplace_Handyman_OneFloor.png"),
+  "office_1_4": require("../assets/Shopping/Workplace_OneFloor_PestControl.png"),
+  "office_1_5": require("../assets/Shopping/Workplace_Empty_OneFloor.png"),
+  "office_1_6": require("../assets/Shopping/WorkSpace_Bank.png"),
+  "office_1_7": require("../assets/Shopping/Groceries_Store.png"),
+  "office_1_8": require("../assets/Shopping/Groceries_Market.png"),
+  // Tier 2: Two floor workplaces
+  "office_2_1": require("../assets/Shopping/Workplace_Dentist_TwoFloors.png"),
+  "office_2_2": require("../assets/Shopping/Workplace_Electrician_TwoFloors.png"),
+  "office_2_3": require("../assets/Shopping/Workplace_Handyman_TwoFloors.png"),
+  "office_2_4": require("../assets/Shopping/Workplace_PestControl_TwoFloors.png"),
+  "office_2_5": require("../assets/Shopping/Workplace_Empty_TwoFloors.png"),
+  "office_2_6": require("../assets/Shopping/Groceries_Mall.png"),
+  "office_2_7": require("../assets/Shopping/Groceries_Market_Front1.png"),
+  "office_2_8": require("../assets/Shopping/Workplace_TwoFloorsRoofed_Clothing.png"),
+  // Tier 3: Larger offices - use mall and special buildings
+  "office_3_1": require("../assets/Shopping/Groceries_Mall.png"),
+  "office_3_2": require("../assets/Shopping/Groceries_Mall_Front.png"),
+  "office_3_3": require("../assets/Shopping/Groceries_Market_Front2.png"),
+  "office_3_4": require("../assets/Shopping/Groceries_Market_Front3.png"),
+  "office_3_5": require("../assets/Shopping/WorkSpace_Bank.png"),
+  "office_3_6": require("../assets/Shopping/Groceries_Store.png"),
+  "office_3_7": require("../assets/Shopping/Groceries_Mall.png"),
+  "office_3_8": require("../assets/Shopping/Groceries_Market.png"),
+
+  // Cafe - From Restaurants/ folder
+  "cafe_1_1": require("../assets/Restaurants/Cafe.png"),
+  "cafe_1_2": require("../assets/Restaurants/Cafe_Front.png"),
+  "cafe_1_3": require("../assets/Restaurants/Bar.png"),
+  "cafe_1_4": require("../assets/Restaurants/Bar_Front.png"),
+  "cafe_1_5": require("../assets/Restaurants/Cafe.png"),
+  "cafe_1_6": require("../assets/Restaurants/Cafe_Front.png"),
+  "cafe_1_7": require("../assets/Restaurants/Bar.png"),
+  "cafe_1_8": require("../assets/Restaurants/Bar_Front.png"),
+
+  // Restaurant - Various restaurant types
+  "restaurant_1_1": require("../assets/Restaurants/Restaurant_Burger.png"),
+  "restaurant_1_2": require("../assets/Restaurants/Restaurant_Pizza.png"),
+  "restaurant_1_3": require("../assets/Restaurants/Restaurant_Chinese.png"),
+  "restaurant_1_4": require("../assets/Restaurants/Restaurant_Mexican.png"),
+  "restaurant_1_5": require("../assets/Restaurants/Restaurant_Sushi.png"),
+  "restaurant_1_6": require("../assets/Restaurants/Restaurant_Ramen.png"),
+  "restaurant_1_7": require("../assets/Restaurants/Restaurant_Indian.png"),
+  "restaurant_1_8": require("../assets/Restaurants/Restaurant_French.png"),
+  // Tier 2: Front view restaurants
+  "restaurant_2_1": require("../assets/Restaurants/Restaurant_Burger_Front.png"),
+  "restaurant_2_2": require("../assets/Restaurants/Restaurant_Pizza_Front.png"),
+  "restaurant_2_3": require("../assets/Restaurants/Restaurant_Chinese_Front.png"),
+  "restaurant_2_4": require("../assets/Restaurants/Restaurant_Mexican_Front.png"),
+  "restaurant_2_5": require("../assets/Restaurants/Restaurant_Sushi_Front.png"),
+  "restaurant_2_6": require("../assets/Restaurants/Restaurant_Ramen_Front.png"),
+  "restaurant_2_7": require("../assets/Restaurants/Restaurant_Indian_Front.png"),
+  "restaurant_2_8": require("../assets/Restaurants/Restaurant_French_Front.png"),
+  // Tier 3: More restaurant variety
+  "restaurant_3_1": require("../assets/Restaurants/Restaurant_Grill.png"),
+  "restaurant_3_2": require("../assets/Restaurants/Restaurant_Grill_Front.png"),
+  "restaurant_3_3": require("../assets/Restaurants/Restaurant_Chicken.png"),
+  "restaurant_3_4": require("../assets/Restaurants/Restaurant_Chicken_Front.png"),
+  "restaurant_3_5": require("../assets/Restaurants/Restaurant_Breakfast.png"),
+  "restaurant_3_6": require("../assets/Restaurants/Restaurant_Breakfast_Front.png"),
+  "restaurant_3_7": require("../assets/Restaurants/Restaurant_Sandwich.png"),
+  "restaurant_3_8": require("../assets/Restaurants/Restaurant_Sandwich_Front.png"),
+
+  // Factory - Using emergency and industrial buildings (2x2)
+  "factory_1_1": require("../assets/Public/Emergency_FireStation.png"),
+  "factory_1_2": require("../assets/Public/Emergency_PoliceStation.png"),
+  "factory_1_3": require("../assets/Public/Industrial_PowerPlant.png"),
+  "factory_1_4": require("../assets/Public/Industrial_WaterPlant.png"),
+  "factory_1_5": require("../assets/Public/Public_Townhall.png"),
+  "factory_1_6": require("../assets/Public/PostOffice.png"),
+  "factory_1_7": require("../assets/Public/RadioStation.png"),
+  "factory_1_8": require("../assets/Public/Public_Library.png"),
+
+  // Hospital - From Public/ folder
+  "hospital_1_1": require("../assets/Public/Doctor_Hospital.png"),
+  "hospital_1_2": require("../assets/Public/Doctor_EmergencyRoom.png"),
+  "hospital_1_3": require("../assets/Public/Doctor_Office.png"),
+  "hospital_1_4": require("../assets/Public/Doctor_Hospital.png"),
+  "hospital_1_5": require("../assets/Public/Doctor_EmergencyRoom.png"),
+  "hospital_1_6": require("../assets/Public/Doctor_Office.png"),
+  "hospital_1_7": require("../assets/Public/Doctor_Hospital.png"),
+  "hospital_1_8": require("../assets/Public/Doctor_EmergencyRoom.png"),
+
+  // School - School → College → University progression for tiers
+  "school_1_1": require("../assets/Public/Education_School.png"),
+  "school_1_2": require("../assets/Public/Education_School.png"),
+  "school_1_3": require("../assets/Public/Education_School.png"),
+  "school_1_4": require("../assets/Public/Education_School.png"),
+  "school_1_5": require("../assets/Public/Education_School.png"),
+  "school_1_6": require("../assets/Public/Education_School.png"),
+  "school_1_7": require("../assets/Public/Education_School.png"),
+  "school_1_8": require("../assets/Public/Education_School.png"),
+  // Tier 2: College
+  "school_2_1": require("../assets/Public/Education_College.png"),
+  "school_2_2": require("../assets/Public/Education_College.png"),
+  "school_2_3": require("../assets/Public/Education_College.png"),
+  "school_2_4": require("../assets/Public/Education_College.png"),
+  "school_2_5": require("../assets/Public/Education_College.png"),
+  "school_2_6": require("../assets/Public/Education_College.png"),
+  "school_2_7": require("../assets/Public/Education_College.png"),
+  "school_2_8": require("../assets/Public/Education_College.png"),
+  // Tier 3: University
+  "school_3_1": require("../assets/Public/Education_University.png"),
+  "school_3_2": require("../assets/Public/Education_University.png"),
+  "school_3_3": require("../assets/Public/Education_University.png"),
+  "school_3_4": require("../assets/Public/Education_University.png"),
+  "school_3_5": require("../assets/Public/Education_University.png"),
+  "school_3_6": require("../assets/Public/Education_University.png"),
+  "school_3_7": require("../assets/Public/Education_University.png"),
+  "school_3_8": require("../assets/Public/Education_University.png"),
+
+  // Hotel - Actual hotel buildings from Public/ (1x2 size)
+  "hotel_1_1": require("../assets/Public/Hotel_OneFloor.png"),
+  "hotel_1_2": require("../assets/Public/Hotel_Front.png"),
+  "hotel_1_3": require("../assets/Public/Hotel_OneFloor.png"),
+  "hotel_1_4": require("../assets/Public/Hotel_Front.png"),
+  "hotel_1_5": require("../assets/Public/Hotel_OneFloor.png"),
+  "hotel_1_6": require("../assets/Public/Hotel_Front.png"),
+  "hotel_1_7": require("../assets/Public/Hotel_OneFloor.png"),
+  "hotel_1_8": require("../assets/Public/Hotel_Front.png"),
+  // Tier 2
+  "hotel_2_1": require("../assets/Public/Hotel_TwoFloors.png"),
+  "hotel_2_2": require("../assets/Public/Hotel_BarFront.png"),
+  "hotel_2_3": require("../assets/Public/Hotel_TwoFloors.png"),
+  "hotel_2_4": require("../assets/Public/Hotel_BarFront.png"),
+  "hotel_2_5": require("../assets/Public/Hotel_TwoFloors.png"),
+  "hotel_2_6": require("../assets/Public/Hotel_BarFront.png"),
+  "hotel_2_7": require("../assets/Public/Hotel_TwoFloors.png"),
+  "hotel_2_8": require("../assets/Public/Hotel_BarFront.png"),
+  // Tier 3
+  "hotel_3_1": require("../assets/Public/Hotel_ThreeFloors.png"),
+  "hotel_3_2": require("../assets/Public/Hotel_RoofBar.png"),
+  "hotel_3_3": require("../assets/Public/Hotel_ThreeFloors.png"),
+  "hotel_3_4": require("../assets/Public/Hotel_RoofBar.png"),
+  "hotel_3_5": require("../assets/Public/Hotel_ThreeFloors.png"),
+  "hotel_3_6": require("../assets/Public/Hotel_RoofBar.png"),
+  "hotel_3_7": require("../assets/Public/Hotel_ThreeFloors.png"),
+  "hotel_3_8": require("../assets/Public/Hotel_RoofBar.png"),
+
+  // Powerplant - From Public/ folder
+  "powerplant_1_1": require("../assets/Public/Industrial_PowerPlant.png"),
+  "powerplant_1_2": require("../assets/Public/Industrial_WaterPlant.png"),
+  "powerplant_1_3": require("../assets/Public/Industrial_WaterPlant_Front.png"),
+  "powerplant_1_4": require("../assets/Public/Industrial_PowerPlant.png"),
+  "powerplant_1_5": require("../assets/Public/Industrial_WaterPlant.png"),
+  "powerplant_1_6": require("../assets/Public/Industrial_WaterPlant_Front.png"),
+  "powerplant_1_7": require("../assets/Public/Industrial_PowerPlant.png"),
+  "powerplant_1_8": require("../assets/Public/Industrial_WaterPlant.png"),
+
+  // Warehouse - Using gas stations and small buildings (1x1)
+  "warehouse_1_1": require("../assets/Public/GasStation.png"),
+  "warehouse_1_2": require("../assets/Public/GasStation_Front1.png"),
+  "warehouse_1_3": require("../assets/Public/GasStation_Front2.png"),
+  "warehouse_1_4": require("../assets/Public/PostOffice.png"),
+  "warehouse_1_5": require("../assets/Public/GasStation.png"),
+  "warehouse_1_6": require("../assets/Public/GasStation_Front1.png"),
+  "warehouse_1_7": require("../assets/Public/GasStation_Front2.png"),
+  "warehouse_1_8": require("../assets/Public/PostOffice.png"),
+
+  // Special - Various landmark buildings from Public/ (2x2)
+  "special_1_1": require("../assets/Public/Leasure_Cinema.png"),
+  "special_1_2": require("../assets/Public/Leasure_Museum.png"),
+  "special_1_3": require("../assets/Public/Leasure_Theater.png"),
+  "special_1_4": require("../assets/Public/Stadium_FootballSocker.png"),
+  "special_1_5": require("../assets/Public/Stadium_Baseball.png"),
+  "special_1_6": require("../assets/Public/Stadium_Athletics.png"),
+  "special_1_7": require("../assets/Public/Public_Trainstation.png"),
+  "special_1_8": require("../assets/Public/Airport_Hangar.png"),
 };
 
 function getBuildingSprite(building: PlacedBuilding): ImageSourcePropType {
@@ -320,6 +483,7 @@ export default function CityScreen() {
     upgradeBuilding,
     getBuildingAtPlot,
     refreshTokens,
+    resetCity,
   } = useBuildings();
 
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -389,7 +553,7 @@ export default function CityScreen() {
   const isoBounds = getIsoBounds(GRID_ROWS, GRID_COLS);
 
   const handlePlotPress = (plotIndex: number) => {
-    const existingBuilding = getBuildingAtPlot(plotIndex);
+    const existingBuilding = getBuildingAtPlot(plotIndex, GRID_ROWS, GRID_COLS);
     if (existingBuilding) {
       // Open upgrade sheet
       setSelectedBuilding(existingBuilding);
@@ -412,7 +576,7 @@ export default function CityScreen() {
     const randomType = PURCHASABLE_BUILDING_TYPES[
       Math.floor(Math.random() * PURCHASABLE_BUILDING_TYPES.length)
     ];
-    const success = await autoBuildBuilding(randomType, maxPlots);
+    const success = await autoBuildBuilding(randomType, maxPlots, GRID_ROWS, GRID_COLS);
     if (success) {
       setSheetVisible(false);
     }
@@ -424,7 +588,7 @@ export default function CityScreen() {
       const randomType = PURCHASABLE_BUILDING_TYPES[
         Math.floor(Math.random() * PURCHASABLE_BUILDING_TYPES.length)
       ];
-      const success = await autoBuildBuilding(randomType, maxPlots);
+      const success = await autoBuildBuilding(randomType, maxPlots, GRID_ROWS, GRID_COLS);
       if (!success) break;
     }
     setSheetVisible(false);
@@ -433,9 +597,9 @@ export default function CityScreen() {
   const handleSelectBuildingType = async (type: BuildingType) => {
     let success = false;
     if (selectedPlotIndex !== null) {
-      success = await placeBuilding(selectedPlotIndex, type);
+      success = await placeBuilding(selectedPlotIndex, type, GRID_ROWS, GRID_COLS);
     } else {
-      success = await autoBuildBuilding(type, maxPlots);
+      success = await autoBuildBuilding(type, maxPlots, GRID_ROWS, GRID_COLS);
     }
     if (success) {
       setSheetVisible(false);
@@ -464,18 +628,58 @@ export default function CityScreen() {
     if (!tileType) return null;
 
     const plotIndex = buildPlotIndex(row, col, GRID_ROWS, GRID_COLS);
-    const building = plotIndex !== null ? getBuildingAtPlot(plotIndex) : null;
+    const building = plotIndex !== null ? getBuildingAtPlot(plotIndex, GRID_ROWS, GRID_COLS) : null;
     const rotation = getTileRotation(tileType);
-    const isRoad = isRoadTile(tileType);
     const isPlot = tileType === "plot";
 
     const isoPos = gridToIso(row, col);
     const screenX = isoPos.x + isoBounds.offsetX;
     const screenY = isoPos.y + isoBounds.offsetY;
-    const zIndex = row + col;
+    // Z-index based on screen Y position - tiles lower on screen (higher Y) should be in front
+    // Multiply by 10 to give room for building height layers
+    const zIndex = (row + col) * 10;
 
-    const tileContent = (
+    // Render plot tiles (grass with optional buildings)
+    if (isPlot) {
+      // Check if this tile should render the building sprite
+      // For multi-tile buildings, we render from the bottom-right tile
+      const renderTileIndex = building ? getBuildingRenderTile(building, GRID_ROWS, GRID_COLS) : null;
+      const shouldRenderBuilding = building && renderTileIndex === plotIndex;
+      const spriteStyle = shouldRenderBuilding ? getBuildingSpriteStyle(building) : null;
+
+      return (
+        <TouchableOpacity
+          key={`${row}-${col}`}
+          activeOpacity={0.7}
+          onPress={() => plotIndex !== null && handlePlotPress(plotIndex)}
+          style={[
+            styles.tileContainer,
+            { left: screenX, top: screenY, zIndex }
+          ]}
+        >
+          <Image source={grassTile} style={styles.tile} />
+          {shouldRenderBuilding && spriteStyle && (
+            <Image
+              source={getBuildingSprite(building)}
+              style={[
+                styles.buildingSpriteBase,
+                {
+                  width: spriteStyle.width,
+                  height: spriteStyle.height,
+                  top: spriteStyle.top,
+                  left: spriteStyle.left,
+                }
+              ]}
+            />
+          )}
+        </TouchableOpacity>
+      );
+    }
+
+    // Render road tiles
+    return (
       <View
+        key={`${row}-${col}`}
         style={[
           styles.tileContainer,
           {
@@ -485,41 +689,10 @@ export default function CityScreen() {
           },
         ]}
       >
-        {!building && <Image source={grassTile} style={styles.tile} />}
-
-        {isRoad && (
-          <Image
-            source={roadSprites[tileType]}
-            style={[styles.roadSprite, { transform: [{ rotate: rotation }] }]}
-          />
-        )}
-
-        {building && (
-          <Image
-            source={getBuildingSprite(building)}
-            style={styles.buildingSprite}
-          />
-        )}
-      </View>
-    );
-
-    if (isPlot) {
-      return (
-        <TouchableOpacity
-          key={`${row}-${col}`}
-          activeOpacity={0.7}
-          onPress={() => plotIndex !== null && handlePlotPress(plotIndex)}
-          style={{ position: "absolute", left: screenX, top: screenY, zIndex: zIndex + 1000 }}
-        >
-          <View style={styles.tileHitArea} />
-          {tileContent.props.children}
-        </TouchableOpacity>
-      );
-    }
-
-    return (
-      <View key={`${row}-${col}`}>
-        {tileContent}
+        <Image
+          source={roadSprites[tileType]}
+          style={[styles.tile, { transform: [{ rotate: rotation }] }]}
+        />
       </View>
     );
   };
@@ -584,6 +757,10 @@ export default function CityScreen() {
 
         <TouchableOpacity style={styles.autoBuildButton} onPress={handleAutoBuild}>
           <Text style={styles.autoBuildButtonText}>+ Auto Build</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.resetButton} onPress={resetCity}>
+          <Text style={styles.resetButtonText}>Reset City (Testing)</Text>
         </TouchableOpacity>
 
         <Text style={styles.messageText}>
@@ -656,7 +833,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#9CA3AF",
+    backgroundColor: "#87CEEB", // Sky blue for a more vibrant look
   },
   gridContainer: {
     position: "relative",
@@ -682,12 +859,9 @@ const styles = StyleSheet.create({
     width: TILE_WIDTH,
     height: TILE_HEIGHT,
   },
-  buildingSprite: {
+  buildingSpriteBase: {
     position: "absolute",
-    top: -13,
-    left: 0,
-    width: TILE_WIDTH,
-    height: TILE_HEIGHT,
+    // Size and position set dynamically based on building footprint
   },
   statsContainer: {
     padding: 16,
@@ -728,6 +902,15 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  resetButton: {
+    alignItems: "center",
+    marginTop: 8,
+    paddingVertical: 8,
+  },
+  resetButtonText: {
+    color: "#EF4444",
+    fontSize: 12,
   },
   messageText: {
     fontSize: 14,

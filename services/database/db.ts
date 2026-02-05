@@ -67,11 +67,26 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
         building_type TEXT NOT NULL,
         tier INTEGER DEFAULT 1,
         variant INTEGER NOT NULL,
+        size_x INTEGER DEFAULT 1,
+        size_y INTEGER DEFAULT 1,
         created_at INTEGER NOT NULL
       );
 
       INSERT OR IGNORE INTO user_stats (id, tokens) VALUES ('user', 0);
     `);
+
+    // Migration: Add size_x and size_y columns to existing placed_buildings table
+    // These will fail silently if columns already exist
+    try {
+      await db.execAsync(`ALTER TABLE placed_buildings ADD COLUMN size_x INTEGER DEFAULT 1`);
+    } catch (e) {
+      // Column already exists, ignore
+    }
+    try {
+      await db.execAsync(`ALTER TABLE placed_buildings ADD COLUMN size_y INTEGER DEFAULT 1`);
+    } catch (e) {
+      // Column already exists, ignore
+    }
 
     isInitializing = false;
     return db;
