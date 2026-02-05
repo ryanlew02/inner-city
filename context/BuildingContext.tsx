@@ -1,31 +1,28 @@
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import {
-  PlacedBuilding,
-  BuildingType,
-  getPlacedBuildings,
-  placeBuilding as placeBuildingDb,
-  upgradeBuilding as upgradeBuildingDb,
-  getBuildingAt,
-  getNextAvailablePlotIndex,
   BUILDING_COST,
-  getUpgradeCost,
-  PURCHASABLE_BUILDING_TYPES,
-  MAX_VARIANTS,
-  BUILDING_SIZES,
-  getBuildingSize,
+  BuildingType,
   canPlaceBuilding,
-  findBuildingAtPlot,
-  getOccupiedPlots,
   clearAllBuildings as clearAllBuildingsDb,
+  findBuildingAtPlot,
   findValidAnchorForBuilding,
+  getBuildingSize,
+  getNextAvailablePlotIndex,
+  getPlacedBuildings,
+  getUpgradeCost,
+  MAX_VARIANTS,
+  placeBuilding as placeBuildingDb,
+  PlacedBuilding,
   plotIndexToGridPosition,
+  PURCHASABLE_BUILDING_TYPES,
+  upgradeBuilding as upgradeBuildingDb
 } from "../services/database/buildingService";
+import { generateUUID } from "../services/database/db";
 import {
-  getTokenCount,
   addTokens as addTokensDb,
+  getTokenCount,
   spendTokens as spendTokensDb,
 } from "../services/database/tokenService";
-import { generateUUID } from "../services/database/db";
 
 type BuildingContextType = {
   buildings: PlacedBuilding[];
@@ -166,20 +163,16 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
     const size = getBuildingSize(buildingType);
 
     if (useInMemory.current) {
-      // Find valid plots using current ref, preferring "bottom" plots to avoid road overlap
-      const validPlots: { plotIndex: number; priority: number }[] = [];
+      const validPlots: { plotIndex: number; row: number; col: number }[] = [];
       for (let i = 0; i < maxPlots; i++) {
-        if (canPlaceBuilding(i, size.x, size.y, buildingsRef.current, gridRows, gridCols)) {
-          const pos = plotIndexToGridPosition(i, gridRows, gridCols);
-          if (pos) {
-            const rowInBlock = pos.row % 3;
-            const priority = rowInBlock === 2 ? 0 : 1;
-            validPlots.push({ plotIndex: i, priority });
-          }
-        }
+        if (!canPlaceBuilding(i, size.x, size.y, buildingsRef.current, gridRows, gridCols)) continue;
+        const pos = plotIndexToGridPosition(i, gridRows, gridCols);
+        if (!pos) continue;
+        validPlots.push({ plotIndex: i, row: pos.row, col: pos.col });
       }
       if (validPlots.length === 0) return false;
-      validPlots.sort((a, b) => a.priority - b.priority || a.plotIndex - b.plotIndex);
+      // Prefer top of grid first (smallest row), then left (smallest col)
+      validPlots.sort((a, b) => a.row - b.row || a.col - b.col);
       return placeBuilding(validPlots[0].plotIndex, buildingType, gridRows, gridCols);
     }
 
@@ -272,5 +265,6 @@ export function useBuildings() {
   return context;
 }
 
-export { PURCHASABLE_BUILDING_TYPES, BUILDING_COST, getUpgradeCost };
+export { BUILDING_COST, getUpgradeCost, PURCHASABLE_BUILDING_TYPES };
 export type { BuildingType, PlacedBuilding };
+

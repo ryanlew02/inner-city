@@ -1,4 +1,4 @@
-import { getDatabase, generateUUID } from './db';
+import { generateUUID, getDatabase } from './db';
 
 export type BuildingType =
   | 'residential'
@@ -16,29 +16,29 @@ export type BuildingType =
 
 export interface PlacedBuilding {
   id: string;
-  plot_index: number;  // Anchor plot (top-left of footprint)
+  plot_index: number;
   building_type: BuildingType;
   tier: number;
   variant: number;
-  size_x: number;      // 1 or 2
-  size_y: number;      // 1 or 2
+  size_x: number;  // Always 1
+  size_y: number;  // Always 1
   created_at: number;
 }
 
-// Building sizes - FIXED per building type (does not change with tier)
-export const BUILDING_SIZES: Record<BuildingType, { x: 1 | 2; y: 1 | 2 }> = {
-  residential: { x: 1, y: 1 },  // Houses - small homes
-  shop: { x: 1, y: 2 },         // Shops - storefronts
-  office: { x: 1, y: 2 },       // Office buildings
-  cafe: { x: 1, y: 1 },         // Small cafes
-  restaurant: { x: 1, y: 2 },   // Restaurants
-  factory: { x: 2, y: 2 },      // Industrial
-  hospital: { x: 2, y: 2 },     // Large public building
-  school: { x: 2, y: 2 },       // Large public building
-  hotel: { x: 1, y: 2 },        // Tall hotel
-  powerplant: { x: 2, y: 2 },   // Industrial
-  warehouse: { x: 1, y: 1 },    // Storage containers
-  special: { x: 2, y: 2 },      // Landmarks (stadiums, etc.)
+// All buildings are 1x1 (single plot) with the new assets
+export const BUILDING_SIZES: Record<BuildingType, { x: 1; y: 1 }> = {
+  residential: { x: 1, y: 1 },
+  shop: { x: 1, y: 1 },
+  office: { x: 1, y: 1 },
+  cafe: { x: 1, y: 1 },
+  restaurant: { x: 1, y: 1 },
+  factory: { x: 1, y: 1 },
+  hospital: { x: 1, y: 1 },
+  school: { x: 1, y: 1 },
+  hotel: { x: 1, y: 1 },
+  powerplant: { x: 1, y: 1 },
+  warehouse: { x: 1, y: 1 },
+  special: { x: 1, y: 1 },
 };
 
 export function getBuildingSize(type: BuildingType): { x: number; y: number } {
@@ -51,8 +51,11 @@ export interface GridPosition {
   col: number;
 }
 
-// Helper: Determine tile type at grid position (matches CityScreen logic)
+// Helper: Determine tile type at grid position (must match CityScreen getGridTileType)
+// Edges (row 0, row gridRows-1, col 0, col gridCols-1) are always road; interior uses 3-cell blocks.
 function getGridTileType(row: number, col: number, gridRows: number, gridCols: number): 'plot' | 'road' {
+  const isEdge = row === 0 || row === gridRows - 1 || col === 0 || col === gridCols - 1;
+  if (isEdge) return 'road';
   const isHorizontalRoadRow = row % 3 === 0;
   const isVerticalRoadCol = col % 3 === 0;
   if (isHorizontalRoadRow || isVerticalRoadCol) return 'road';
@@ -186,8 +189,7 @@ export function findBuildingAtPlot(
   return undefined;
 }
 
-// Helper: Find a valid anchor plot for a building near the clicked plot
-// For multi-tile buildings, this finds the top-left corner of the block containing the clicked plot
+// All buildings are 1x1: the clicked plot is the anchor if it can be placed there.
 export function findValidAnchorForBuilding(
   clickedPlot: number,
   buildingType: BuildingType,
@@ -196,38 +198,9 @@ export function findValidAnchorForBuilding(
   gridCols: number
 ): number | null {
   const size = BUILDING_SIZES[buildingType];
-
-  // If 1x1, the clicked plot is the anchor
-  if (size.x === 1 && size.y === 1) {
-    if (canPlaceBuilding(clickedPlot, size.x, size.y, existingBuildings, gridRows, gridCols)) {
-      return clickedPlot;
-    }
-    return null;
+  if (canPlaceBuilding(clickedPlot, size.x, size.y, existingBuildings, gridRows, gridCols)) {
+    return clickedPlot;
   }
-
-  const clickedPos = plotIndexToGridPosition(clickedPlot, gridRows, gridCols);
-  if (!clickedPos) return null;
-
-  // Find the top-left of the city block containing this plot
-  // City blocks are 2x2 plot areas between roads
-  // Roads are at row % 3 === 0 and col % 3 === 0
-  // So block top-left is at row where (row-1) % 3 === 0, col where (col-1) % 3 === 0
-  const blockStartRow = Math.floor((clickedPos.row - 1) / 3) * 3 + 1;
-  const blockStartCol = Math.floor((clickedPos.col - 1) / 3) * 3 + 1;
-
-  // Try anchoring at different positions within the block to fit the building
-  for (let dr = 0; dr <= 2 - size.y; dr++) {
-    for (let dc = 0; dc <= 2 - size.x; dc++) {
-      const anchorRow = blockStartRow + dr;
-      const anchorCol = blockStartCol + dc;
-      const anchorPlot = gridPositionToPlotIndex(anchorRow, anchorCol, gridRows, gridCols);
-
-      if (anchorPlot !== null && canPlaceBuilding(anchorPlot, size.x, size.y, existingBuildings, gridRows, gridCols)) {
-        return anchorPlot;
-      }
-    }
-  }
-
   return null;
 }
 
@@ -348,27 +321,20 @@ export async function getNextAvailablePlotIndex(
   const buildings = await getPlacedBuildings();
   const size = BUILDING_SIZES[buildingType];
 
-  // Prefer plots at the "bottom" of blocks (higher row numbers within each block)
-  // to avoid visual overlap with roads above
-  const validPlots: { plotIndex: number; priority: number }[] = [];
+  // Prefer plots at the top of the grid first (smallest row), then left (smallest col)
+  const validPlots: { plotIndex: number; row: number; col: number }[] = [];
 
   for (let i = 0; i < maxPlots; i++) {
-    if (canPlaceBuilding(i, size.x, size.y, buildings, gridRows, gridCols)) {
-      const pos = plotIndexToGridPosition(i, gridRows, gridCols);
-      if (pos) {
-        // Priority: prefer plots in row 2, 5, 8... (bottom of each block) over row 1, 4, 7... (top)
-        // Within a block, row % 3 === 2 is bottom, row % 3 === 1 is top
-        const rowInBlock = pos.row % 3; // 1 = top of block, 2 = bottom of block
-        const priority = rowInBlock === 2 ? 0 : 1; // Lower priority number = preferred
-        validPlots.push({ plotIndex: i, priority });
-      }
-    }
+    const pos = plotIndexToGridPosition(i, gridRows, gridCols);
+    if (!pos || getGridTileType(pos.row, pos.col, gridRows, gridCols) !== 'plot') continue;
+    if (!canPlaceBuilding(i, size.x, size.y, buildings, gridRows, gridCols)) continue;
+    validPlots.push({ plotIndex: i, row: pos.row, col: pos.col });
   }
 
   if (validPlots.length === 0) return null;
 
-  // Sort by priority (prefer bottom plots), then by plot index
-  validPlots.sort((a, b) => a.priority - b.priority || a.plotIndex - b.plotIndex);
+  // Sort by row (top first), then by col (left first)
+  validPlots.sort((a, b) => a.row - b.row || a.col - b.col);
 
   return validPlots[0].plotIndex;
 }
