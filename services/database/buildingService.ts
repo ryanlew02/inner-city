@@ -1,18 +1,11 @@
 import { generateUUID, getDatabase } from './db';
 
 export type BuildingType =
-  | 'residential'
-  | 'shop'
+  | 'apartment'
+  | 'house'
   | 'office'
-  | 'cafe'
-  | 'restaurant'
   | 'factory'
-  | 'hospital'
-  | 'school'
-  | 'hotel'
-  | 'powerplant'
-  | 'warehouse'
-  | 'special';
+  | 'solarpanel';
 
 export interface PlacedBuilding {
   id: string;
@@ -27,18 +20,11 @@ export interface PlacedBuilding {
 
 // All buildings are 1x1 (single plot) with the new assets
 export const BUILDING_SIZES: Record<BuildingType, { x: 1; y: 1 }> = {
-  residential: { x: 1, y: 1 },
-  shop: { x: 1, y: 1 },
+  apartment: { x: 1, y: 1 },
+  house: { x: 1, y: 1 },
   office: { x: 1, y: 1 },
-  cafe: { x: 1, y: 1 },
-  restaurant: { x: 1, y: 1 },
   factory: { x: 1, y: 1 },
-  hospital: { x: 1, y: 1 },
-  school: { x: 1, y: 1 },
-  hotel: { x: 1, y: 1 },
-  powerplant: { x: 1, y: 1 },
-  warehouse: { x: 1, y: 1 },
-  special: { x: 1, y: 1 },
+  solarpanel: { x: 1, y: 1 },
 };
 
 export function getBuildingSize(type: BuildingType): { x: number; y: number } {
@@ -205,17 +191,11 @@ export function findValidAnchorForBuilding(
 }
 
 export const PURCHASABLE_BUILDING_TYPES: BuildingType[] = [
-  'residential',
-  'shop',
+  'apartment',
+  'house',
   'office',
-  'cafe',
-  'restaurant',
   'factory',
-  'hospital',
-  'school',
-  'hotel',
-  'powerplant',
-  'warehouse',
+  'solarpanel',
 ];
 
 export const BUILDING_COST = 3;
@@ -224,18 +204,11 @@ export const UPGRADE_COST_TIER3 = 5;
 
 // Max variants per building type based on new asset availability
 export const MAX_VARIANTS: Record<BuildingType, number> = {
-  residential: 8,  // Houses + Apartments variety
-  shop: 8,         // Various shop types
-  office: 8,       // Workplace types
-  cafe: 4,         // Cafe and Bar with Front variants
-  restaurant: 8,   // Various restaurant types
-  factory: 7,      // Construction and industrial
-  hospital: 4,     // Hospital and EmergencyRoom variants
-  school: 2,       // School with/without roof (tier progression handles variety)
-  hotel: 8,        // Apartments in different colors/sizes
-  powerplant: 3,   // PowerPlant and WaterPlant
-  warehouse: 8,    // Shipping containers
-  special: 8,      // Stadiums, Cinema, Museum, etc.
+  apartment: 12,   // Apartments_level_1 (12 sprites)
+  house: 8,        // Colored houses across Green, Orange, Red, Turquoise, Wood, Yellow
+  office: 8,       // Offices_level_1 (8 sprites)
+  factory: 2,      // factory_1, factory_2
+  solarpanel: 2,   // solar_panels_1, solar_panels_2
 };
 
 export async function getPlacedBuildings(): Promise<PlacedBuilding[]> {
@@ -244,11 +217,14 @@ export async function getPlacedBuildings(): Promise<PlacedBuilding[]> {
     `SELECT * FROM placed_buildings ORDER BY plot_index ASC`
   );
   // Ensure size_x and size_y have values (for legacy buildings)
-  return result.map(building => ({
-    ...building,
-    size_x: building.size_x ?? BUILDING_SIZES[building.building_type].x,
-    size_y: building.size_y ?? BUILDING_SIZES[building.building_type].y,
-  }));
+  // Filter out buildings with old types that no longer exist
+  return result
+    .filter(building => building.building_type in BUILDING_SIZES)
+    .map(building => ({
+      ...building,
+      size_x: building.size_x ?? BUILDING_SIZES[building.building_type].x,
+      size_y: building.size_y ?? BUILDING_SIZES[building.building_type].y,
+    }));
 }
 
 export async function getBuildingAt(plotIndex: number): Promise<PlacedBuilding | null> {

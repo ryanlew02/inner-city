@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { AppState, AppStateStatus } from "react-native";
+import { Audio } from "expo-av";
 import { Habit, HabitEntry, parseScheduleJson, isScheduledForToday, isScheduledForDate } from "../types/habit";
 import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb } from "../services/database/habitService";
 import { getEntriesForDate, upsertEntry, deleteEntryForHabit } from "../services/database/entryService";
@@ -44,11 +45,27 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   const [onTokenEarned, setOnTokenEarned] = useState<(() => void) | undefined>(undefined);
   const useInMemory = useRef(false);
   const appState = useRef(AppState.currentState);
+  const completionSound = useRef<Audio.Sound | null>(null);
 
   const isViewingToday = viewingDate === currentDate;
 
+  const playCompletionSound = () => {
+    completionSound.current?.replayAsync().catch(() => {});
+  };
+
   useEffect(() => {
     loadData();
+
+    // Load completion sound
+    Audio.Sound.createAsync(require("../assets/sounds/complete.wav"))
+      .then(({ sound }) => {
+        completionSound.current = sound;
+      })
+      .catch((err) => console.warn("Failed to load completion sound:", err));
+
+    return () => {
+      completionSound.current?.unloadAsync();
+    };
   }, []);
 
   // Check for date change when app comes to foreground
@@ -175,6 +192,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           return newMap;
         });
         if (!existingEntry || existingEntry.value === 0) {
+          playCompletionSound();
           onTokenEarned?.();
         }
       }
@@ -202,6 +220,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           return newMap;
         });
         if (!existingEntry || existingEntry.value === 0) {
+          playCompletionSound();
           await addTokensDb(1);
           onTokenEarned?.();
         }
@@ -258,6 +277,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       if (!wasCompleted && habit) {
         const targetValue = habit.target_value;
         if (value >= targetValue) {
+          playCompletionSound();
           onTokenEarned?.();
         }
       }
@@ -279,6 +299,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       if (!wasCompleted && habit) {
         const targetValue = habit.target_value;
         if (value >= targetValue) {
+          playCompletionSound();
           await addTokensDb(1);
           onTokenEarned?.();
         }

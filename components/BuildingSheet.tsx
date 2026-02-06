@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   Animated,
@@ -11,6 +12,8 @@ import {
   Pressable,
   Alert,
 } from "react-native";
+
+const buildCoin = require("../assets/images/build_coin.png");
 import {
   BuildingType,
   PlacedBuilding,
@@ -35,33 +38,19 @@ interface BuildingSheetProps {
 }
 
 const BUILDING_LABELS: Record<BuildingType, string> = {
-  residential: "Residential",
-  shop: "Shop",
-  office: "Office",
-  cafe: "Cafe",
-  restaurant: "Restaurant",
+  apartment: "Apartments",
+  house: "Houses",
+  office: "Offices",
   factory: "Factory",
-  hospital: "Hospital",
-  school: "School",
-  hotel: "Hotel",
-  powerplant: "Power Plant",
-  warehouse: "Warehouse",
-  special: "Special",
+  solarpanel: "Solar Panels",
 };
 
 const BUILDING_ICONS: Record<BuildingType, string> = {
-  residential: "🏠",
-  shop: "🏪",
-  office: "🏢",
-  cafe: "☕",
-  restaurant: "🍽️",
+  apartment: "🏢",
+  house: "🏠",
+  office: "🏬",
   factory: "🏭",
-  hospital: "🏥",
-  school: "🏫",
-  hotel: "🏨",
-  powerplant: "⚡",
-  warehouse: "📦",
-  special: "⭐",
+  solarpanel: "☀️",
 };
 
 export default function BuildingSheet({
@@ -159,7 +148,7 @@ export default function BuildingSheet({
             <View style={styles.header}>
               <Text style={styles.title}>{getTitle()}</Text>
               <View style={styles.tokenBadge}>
-                <Text style={styles.tokenIcon}>🪙</Text>
+                <Image source={buildCoin} style={styles.tokenIconImage} />
                 <Text style={styles.tokenCount}>{tokens}</Text>
               </View>
             </View>
@@ -304,14 +293,17 @@ export default function BuildingSheet({
                       onPress={handleUpgrade}
                       disabled={!canAffordUpgrade}
                     >
-                      <Text
-                        style={[
-                          styles.upgradeButtonText,
-                          !canAffordUpgrade && styles.textDisabled,
-                        ]}
-                      >
-                        Upgrade to Tier {selectedBuilding.tier + 1} for {upgradeCost} 🪙
-                      </Text>
+                      <View style={styles.upgradeButtonRow}>
+                        <Text
+                          style={[
+                            styles.upgradeButtonText,
+                            !canAffordUpgrade && styles.textDisabled,
+                          ]}
+                        >
+                          Upgrade to Tier {selectedBuilding.tier + 1} for {upgradeCost}
+                        </Text>
+                        <Image source={buildCoin} style={styles.tokenIconImageSmall} />
+                      </View>
                     </TouchableOpacity>
                   )}
 
@@ -381,6 +373,21 @@ const styles = StyleSheet.create({
   tokenIcon: {
     fontSize: 16,
     marginRight: 4,
+  },
+  tokenIconImage: {
+    width: 18,
+    height: 18,
+    marginRight: 4,
+  },
+  tokenIconImageSmall: {
+    width: 16,
+    height: 16,
+    marginLeft: 4,
+  },
+  upgradeButtonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   tokenCount: {
     fontSize: 16,

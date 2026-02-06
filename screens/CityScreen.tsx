@@ -11,25 +11,63 @@ const TILE_WIDTH = 64;
 const TILE_HEIGHT = 64;
 // Vertical step for isometric grid - controls how much tiles overlap vertically
 // 32 was too close (tiles overlapped wrong), 48 was too far (gaps)
-const ISO_TILE_HEIGHT = 38;
+const ISO_TILE_HEIGHT = 37;
 
-// All buildings are 1x1; single sprite per plot. Small so the whole thing fits in the plot.
-const BUILDING_WIDTH = 28;
-const BUILDING_HEIGHT = 36;
+// All buildings are 1x1; sprite fills the tile and uses 'contain' to preserve aspect ratio.
+const BUILDING_WIDTH = TILE_WIDTH - 12;
+const BUILDING_HEIGHT = TILE_HEIGHT - 12;
 const BUILDING_SPRITE_SIZE = {
   width: BUILDING_WIDTH,
   height: BUILDING_HEIGHT,
   offsetX: (TILE_WIDTH - BUILDING_WIDTH) / 2,
-  offsetY: (TILE_HEIGHT - BUILDING_HEIGHT) / 2, // Centered in tile, fully inside
+  offsetY: (TILE_HEIGHT - BUILDING_HEIGHT) / 2,
 };
-// No overflow needed when building fits in tile
-const PLOT_CONTAINER_EXTRA_TOP = 0;
+const PLOT_CONTAINER_EXTRA_TOP = 15;
 
-function getBuildingSpriteStyle(_building: PlacedBuilding): { width: number; height: number; top: number; left: number } {
+// Check if a building variant uses a solar panel sprite
+function isSolarPanel(building: PlacedBuilding): boolean {
+  return building.building_type === "solarpanel";
+}
+
+function isFactorySprite(building: PlacedBuilding): boolean {
+  return building.building_type === "factory";
+}
+
+function getBuildingSpriteStyle(building: PlacedBuilding): { width: number; height: number; top: number; left: number } {
+  let top = 0;
+  if (isSolarPanel(building)) {
+    top = 7;
+  } else if (isFactorySprite(building)) {
+    top = -4;
+  } else if (building.building_type === "office") {
+    top = -4;
+  } else if (building.building_type === "apartment") {
+    top = -4;
+  }
+  // Solar panels - scale down
+  if (building.building_type === "solarpanel") {
+    const solarSize = BUILDING_SPRITE_SIZE.width - 8;
+    return {
+      width: solarSize,
+      height: solarSize,
+      top: top + 6,
+      left: BUILDING_SPRITE_SIZE.offsetX + 4,
+    };
+  }
+  // Houses are smaller buildings - scale them down
+  if (building.building_type === "house") {
+    const houseSize = BUILDING_SPRITE_SIZE.width - 8;
+    return {
+      width: houseSize,
+      height: houseSize,
+      top: top + 6,
+      left: BUILDING_SPRITE_SIZE.offsetX + 4,
+    };
+  }
   return {
     width: BUILDING_SPRITE_SIZE.width,
     height: BUILDING_SPRITE_SIZE.height,
-    top: BUILDING_SPRITE_SIZE.offsetY,
+    top,
     left: BUILDING_SPRITE_SIZE.offsetX,
   };
 }
@@ -107,324 +145,130 @@ const grassTile = require("../assets/Sprites/LandscapeTiles/grass.png");
 
 // RoadTilesSimple: filenames without parentheses so Metro can resolve on Android
 const roadSprites: Record<string, ImageSourcePropType> = {
-  road_h: require("../assets/Sprites/RoadTilesSimple/road_3.png"),
-  road_v: require("../assets/Sprites/RoadTilesSimple/road_3.png"),
-  road_cross: require("../assets/Sprites/RoadTilesSimple/road_1.png"),
-  road_corner_nw: require("../assets/Sprites/RoadTilesSimple/road_5.png"),
-  road_corner_ne: require("../assets/Sprites/RoadTilesSimple/road_6.png"),
-  road_corner_sw: require("../assets/Sprites/RoadTilesSimple/road_7.png"),
-  road_corner_se: require("../assets/Sprites/RoadTilesSimple/road_8.png"),
-  road_t_north: require("../assets/Sprites/RoadTilesSimple/road_1.png"),
-  road_t_south: require("../assets/Sprites/RoadTilesSimple/road_1.png"),
-  road_t_east: require("../assets/Sprites/RoadTilesSimple/road_1.png"),
-  road_t_west: require("../assets/Sprites/RoadTilesSimple/road_1.png"),
+  road_h: require("../assets/Sprites/RoadTilesSimple/road_2.png"),
+  road_v: require("../assets/Sprites/RoadTilesSimple/road_1.png"),
+  road_cross: require("../assets/Sprites/RoadTilesSimple/road_3.png"),
+  road_corner_nw: require("../assets/Sprites/RoadTiles/road_asphalt_13.png"),
+  road_corner_ne: require("../assets/Sprites/RoadTiles/road_asphalt_11.png"),
+  road_corner_sw: require("../assets/Sprites/RoadTiles/road_asphalt_12.png"),
+  road_corner_se: require("../assets/Sprites/RoadTiles/road_asphalt_14.png"),
+  road_t_south: require("../assets/Sprites/RoadTilesSimple/road_7.png"),
+  road_t_north: require("../assets/Sprites/RoadTiles/road_asphalt_10.png"),
+  road_t_east: require("../assets/Sprites/RoadTilesSimple/road_8.png"),
+  road_t_west: require("../assets/Sprites/RoadTiles/road_asphalt_9.png"),
 };
 
 function isRoadTile(tileType: TileType): boolean {
   return tileType !== "plot";
 }
 
-// New assets: Sprites/ModularBlocksTiles (1x1 only). All paths static for Metro bundler.
+// New assets: 5 building categories. All paths static for Metro bundler.
 const buildingSpriteMap: Record<string, ImageSourcePropType> = {
-  residential_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_1.png"),
-  residential_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_2.png"),
-  residential_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_3.png"),
-  residential_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_4.png"),
-  residential_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_5.png"),
-  residential_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_6.png"),
-  residential_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 1/house_red_level_1_1.png"),
-  residential_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 1/house_red_level_1_2.png"),
-  residential_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_1.png"),
-  residential_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_2.png"),
-  residential_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_3.png"),
-  residential_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_4.png"),
-  residential_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_1.png"),
-  residential_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_2.png"),
-  residential_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_3.png"),
-  residential_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_4.png"),
-  residential_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_1.png"),
-  residential_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_2.png"),
-  residential_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_3.png"),
-  residential_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_4.png"),
-  residential_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_1.png"),
-  residential_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_2.png"),
-  residential_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_3.png"),
-  residential_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_4.png"),
+  // Apartments (12 variants, same sprites all tiers since only Level_1 exists)
+  apartment_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_1.png"),
+  apartment_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_2.png"),
+  apartment_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_3.png"),
+  apartment_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_4.png"),
+  apartment_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_5.png"),
+  apartment_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_6.png"),
+  apartment_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_7.png"),
+  apartment_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_8.png"),
+  apartment_1_9: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_9.png"),
+  apartment_1_10: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_10.png"),
+  apartment_1_11: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_11.png"),
+  apartment_1_12: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_12.png"),
+  apartment_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_1.png"),
+  apartment_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_2.png"),
+  apartment_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_3.png"),
+  apartment_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_4.png"),
+  apartment_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_5.png"),
+  apartment_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_6.png"),
+  apartment_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_7.png"),
+  apartment_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_8.png"),
+  apartment_2_9: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_9.png"),
+  apartment_2_10: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_10.png"),
+  apartment_2_11: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_11.png"),
+  apartment_2_12: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_12.png"),
+  apartment_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_1.png"),
+  apartment_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_2.png"),
+  apartment_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_3.png"),
+  apartment_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_4.png"),
+  apartment_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_5.png"),
+  apartment_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_6.png"),
+  apartment_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_7.png"),
+  apartment_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_8.png"),
+  apartment_3_9: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_9.png"),
+  apartment_3_10: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_10.png"),
+  apartment_3_11: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_11.png"),
+  apartment_3_12: require("../assets/Sprites/ModularBlocksTiles/Houses/Apartments_level_1/apartments_level_1_12.png"),
 
-  shop_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Orange houses/Level 1/house_orange_level_1_1.png"),
-  shop_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Orange houses/Level 1/house_orange_level_1_2.png"),
-  shop_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Turquoise houses/Level 1/house_turquoise_level_1_1.png"),
-  shop_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Turquoise houses/Level 1/house_turquoise_level_1_2.png"),
-  shop_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_1.png"),
-  shop_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_2.png"),
-  shop_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Orange houses/Level 1/house_orange_level_1_3.png"),
-  shop_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Turquoise houses/Level 1/house_turquoise_level_1_3.png"),
-  shop_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_1.png"),
-  shop_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_2.png"),
-  shop_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_3.png"),
-  shop_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_4.png"),
-  shop_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_1.png"),
-  shop_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_2.png"),
-  shop_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_3.png"),
-  shop_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_4.png"),
-  shop_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_1.png"),
-  shop_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_2.png"),
-  shop_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_3.png"),
-  shop_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_4.png"),
-  shop_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 4/house_green_level_4_1.png"),
-  shop_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 4/house_green_level_4_2.png"),
-  shop_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 4/house_green_level_4_3.png"),
-  shop_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 4/house_green_level_4_4.png"),
+  // Houses (8 variants across colors, tiers map to levels 1-3)
+  house_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Green_houses/Level_1/house_green_level_1_1.png"),
+  house_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Green_houses/Level_1/house_green_level_1_2.png"),
+  house_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Orange_houses/Level_1/house_orange_level_1_1.png"),
+  house_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Red_houses/Level_1/house_red_level_1_1.png"),
+  house_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Turquoise_houses/Level_1/house_turquoise_level_1_1.png"),
+  house_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood_houses/Level_1/house_wood_level_1_1.png"),
+  house_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow_houses/Level_1/house_yellow_level_1_1.png"),
+  house_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow_houses/Level_1/house_yellow_level_1_2.png"),
+  house_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Green_houses/Level_2/house_green_level_2_1.png"),
+  house_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Green_houses/Level_2/house_green_level_2_2.png"),
+  house_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Orange_houses/Level_2/house_orange_level_2_1.png"),
+  house_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Red_houses/Level_2/house_red_level_2_1.png"),
+  house_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Turquoise_houses/Level_2/house_turquoise_level_2_1.png"),
+  house_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood_houses/Level_2/house_wood_level_2_1.png"),
+  house_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow_houses/Level_2/house_yellow_level_2_1.png"),
+  house_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow_houses/Level_2/house_yellow_level_2_2.png"),
+  house_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Green_houses/Level_3/house_green_level_3_1.png"),
+  house_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Green_houses/Level_3/house_green_level_3_2.png"),
+  house_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Orange_houses/Level_3/house_orange_level_3_1.png"),
+  house_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Red_houses/Level_3/house_red_level_3_1.png"),
+  house_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Turquoise_houses/Level_3/house_turquoise_level_3_1.png"),
+  house_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood_houses/Level_3/house_wood_level_3_1.png"),
+  house_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow_houses/Level_3/house_yellow_level_3_1.png"),
+  house_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow_houses/Level_3/house_yellow_level_3_2.png"),
 
-  office_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Purple-yellow houses/house_purple_yellow_1.png"),
-  office_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Purple-yellow houses/house_purple_yellow_2.png"),
-  office_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow-blue houses/house_yellow_blue_1.png"),
-  office_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow-blue houses/house_yellow_blue_2.png"),
-  office_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Green-red houses/house_green_red_1.png"),
-  office_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Green-red houses/house_green_red_2.png"),
-  office_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Purple-yellow houses/house_yellow_purple_1.png"),
-  office_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Purple-yellow houses/house_yellow_purple_2.png"),
-  office_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_1.png"),
-  office_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_2.png"),
-  office_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_3.png"),
-  office_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_4.png"),
-  office_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_1.png"),
-  office_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_2.png"),
-  office_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_3.png"),
-  office_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_4.png"),
-  office_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_1.png"),
-  office_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_2.png"),
-  office_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_3.png"),
-  office_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_4.png"),
-  office_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_1.png"),
-  office_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_2.png"),
-  office_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_3.png"),
-  office_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_4.png"),
+  // Offices (8 variants, same sprites all tiers since only Level_1 exists)
+  office_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_1.png"),
+  office_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_2.png"),
+  office_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_3.png"),
+  office_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_4.png"),
+  office_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_5.png"),
+  office_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_6.png"),
+  office_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_7.png"),
+  office_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_8.png"),
+  office_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_1.png"),
+  office_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_2.png"),
+  office_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_3.png"),
+  office_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_4.png"),
+  office_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_5.png"),
+  office_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_6.png"),
+  office_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_7.png"),
+  office_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_8.png"),
+  office_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_1.png"),
+  office_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_2.png"),
+  office_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_3.png"),
+  office_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_4.png"),
+  office_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_5.png"),
+  office_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_6.png"),
+  office_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_7.png"),
+  office_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Offices_level_1/office_level_1_8.png"),
 
-  cafe_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_1.png"),
-  cafe_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_2.png"),
-  cafe_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_3.png"),
-  cafe_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_4.png"),
-  cafe_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_5.png"),
-  cafe_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_6.png"),
-  cafe_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_1.png"),
-  cafe_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_2.png"),
-  cafe_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_1.png"),
-  cafe_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_2.png"),
-  cafe_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_3.png"),
-  cafe_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_4.png"),
-  cafe_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_1.png"),
-  cafe_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_2.png"),
-  cafe_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_3.png"),
-  cafe_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_4.png"),
-  cafe_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_1.png"),
-  cafe_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_2.png"),
-  cafe_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_3.png"),
-  cafe_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_4.png"),
-  cafe_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_1.png"),
-  cafe_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_2.png"),
-  cafe_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_3.png"),
-  cafe_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_4.png"),
-
-  restaurant_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Turquoise houses/Level 1/house_turquoise_level_1_1.png"),
-  restaurant_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Turquoise houses/Level 1/house_turquoise_level_1_2.png"),
-  restaurant_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Turquoise houses/Level 1/house_turquoise_level_1_3.png"),
-  restaurant_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Turquoise houses/Level 1/house_turquoise_level_1_4.png"),
-  restaurant_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Orange houses/Level 1/house_orange_level_1_1.png"),
-  restaurant_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Orange houses/Level 1/house_orange_level_1_2.png"),
-  restaurant_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Orange houses/Level 1/house_orange_level_1_3.png"),
-  restaurant_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Orange houses/Level 1/house_orange_level_1_4.png"),
-  restaurant_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_1.png"),
-  restaurant_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_2.png"),
-  restaurant_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_3.png"),
-  restaurant_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_4.png"),
-  restaurant_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_1.png"),
-  restaurant_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_2.png"),
-  restaurant_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_3.png"),
-  restaurant_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_4.png"),
-  restaurant_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_1.png"),
-  restaurant_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_2.png"),
-  restaurant_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_3.png"),
-  restaurant_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_4.png"),
-  restaurant_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_1.png"),
-  restaurant_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_2.png"),
-  restaurant_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_3.png"),
-  restaurant_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_4.png"),
-
+  // Factory (2 variants, same sprites all tiers)
   factory_1_1: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
   factory_1_2: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  factory_1_3: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  factory_1_4: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  factory_1_5: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
-  factory_1_6: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
-  factory_1_7: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  factory_1_8: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
   factory_2_1: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
   factory_2_2: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  factory_2_3: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
-  factory_2_4: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
-  factory_2_5: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  factory_2_6: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  factory_2_7: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  factory_2_8: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
   factory_3_1: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
   factory_3_2: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  factory_3_3: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
-  factory_3_4: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
-  factory_3_5: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  factory_3_6: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  factory_3_7: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  factory_3_8: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
 
-  hospital_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 1/house_red_level_1_1.png"),
-  hospital_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 1/house_red_level_1_2.png"),
-  hospital_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 1/house_red_level_1_3.png"),
-  hospital_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 1/house_red_level_1_4.png"),
-  hospital_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 1/house_red_level_1_5.png"),
-  hospital_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 1/house_red_level_1_6.png"),
-  hospital_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 1/house_red_level_1_1.png"),
-  hospital_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 1/house_red_level_1_2.png"),
-  hospital_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_1.png"),
-  hospital_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_2.png"),
-  hospital_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_3.png"),
-  hospital_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_4.png"),
-  hospital_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_1.png"),
-  hospital_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_2.png"),
-  hospital_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_3.png"),
-  hospital_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 2/house_red_level_2_4.png"),
-  hospital_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_1.png"),
-  hospital_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_2.png"),
-  hospital_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_3.png"),
-  hospital_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_4.png"),
-  hospital_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_1.png"),
-  hospital_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_2.png"),
-  hospital_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_3.png"),
-  hospital_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Red houses/Level 3/house_red_level_3_4.png"),
-
-  school_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_1.png"),
-  school_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_2.png"),
-  school_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_3.png"),
-  school_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_4.png"),
-  school_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_5.png"),
-  school_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_6.png"),
-  school_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_1.png"),
-  school_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 1/house_yellow_level_1_2.png"),
-  school_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_1.png"),
-  school_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_2.png"),
-  school_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_3.png"),
-  school_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_4.png"),
-  school_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_1.png"),
-  school_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_2.png"),
-  school_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_3.png"),
-  school_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_4.png"),
-  school_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_1.png"),
-  school_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_2.png"),
-  school_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_3.png"),
-  school_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_4.png"),
-  school_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_1.png"),
-  school_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_2.png"),
-  school_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_3.png"),
-  school_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 4/house_yellow_level_4_4.png"),
-
-  hotel_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_1.png"),
-  hotel_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_2.png"),
-  hotel_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_3.png"),
-  hotel_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_4.png"),
-  hotel_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_5.png"),
-  hotel_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_6.png"),
-  hotel_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_1.png"),
-  hotel_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_2.png"),
-  hotel_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 4/house_grey_level_4_1.png"),
-  hotel_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 4/house_grey_level_4_2.png"),
-  hotel_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 4/house_white_level_4_1.png"),
-  hotel_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 4/house_white_level_4_2.png"),
-  hotel_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 4/house_grey_level_4_1.png"),
-  hotel_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 4/house_grey_level_4_2.png"),
-  hotel_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 4/house_white_level_4_1.png"),
-  hotel_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 4/house_white_level_4_2.png"),
-  hotel_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 5/house_grey_level_5_1.png"),
-  hotel_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 5/house_grey_level_5_2.png"),
-  hotel_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 5/house_white_level_5_1.png"),
-  hotel_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 5/house_white_level_5_2.png"),
-  hotel_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 5/house_grey_level_5_1.png"),
-  hotel_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 5/house_white_level_5_1.png"),
-  hotel_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 5/house_grey_level_5_2.png"),
-  hotel_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 5/house_white_level_5_2.png"),
-
-  powerplant_1_1: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
-  powerplant_1_2: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
-  powerplant_1_3: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  powerplant_1_4: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  powerplant_1_5: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
-  powerplant_1_6: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
-  powerplant_1_7: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  powerplant_1_8: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  powerplant_2_1: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
-  powerplant_2_2: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
-  powerplant_2_3: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  powerplant_2_4: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  powerplant_2_5: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
-  powerplant_2_6: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
-  powerplant_2_7: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  powerplant_2_8: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  powerplant_3_1: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
-  powerplant_3_2: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
-  powerplant_3_3: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  powerplant_3_4: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-  powerplant_3_5: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
-  powerplant_3_6: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
-  powerplant_3_7: require("../assets/Sprites/ModularBlocksTiles/factory_1.png"),
-  powerplant_3_8: require("../assets/Sprites/ModularBlocksTiles/factory_2.png"),
-
-  warehouse_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_1.png"),
-  warehouse_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_2.png"),
-  warehouse_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_3.png"),
-  warehouse_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_4.png"),
-  warehouse_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_5.png"),
-  warehouse_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_6.png"),
-  warehouse_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_1.png"),
-  warehouse_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Wood houses/Level 1/house_wood_level_1_2.png"),
-  warehouse_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_1.png"),
-  warehouse_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_2.png"),
-  warehouse_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_3.png"),
-  warehouse_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 2/house_yellow_level_2_4.png"),
-  warehouse_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_1.png"),
-  warehouse_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_2.png"),
-  warehouse_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_3.png"),
-  warehouse_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 2/house_green_level_2_4.png"),
-  warehouse_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_1.png"),
-  warehouse_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_2.png"),
-  warehouse_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_3.png"),
-  warehouse_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Yellow houses/Level 3/house_yellow_level_3_4.png"),
-  warehouse_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_1.png"),
-  warehouse_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_2.png"),
-  warehouse_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_3.png"),
-  warehouse_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Green houses/Level 3/house_green_level_3_4.png"),
-
-  special_1_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_1.png"),
-  special_1_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_2.png"),
-  special_1_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_1.png"),
-  special_1_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_2.png"),
-  special_1_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_1.png"),
-  special_1_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_2.png"),
-  special_1_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_1.png"),
-  special_1_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_2.png"),
-  special_2_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_1.png"),
-  special_2_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_1.png"),
-  special_2_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_2.png"),
-  special_2_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_2.png"),
-  special_2_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_1.png"),
-  special_2_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_2.png"),
-  special_2_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_1.png"),
-  special_2_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_2.png"),
-  special_3_1: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_1.png"),
-  special_3_2: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_2.png"),
-  special_3_3: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_1.png"),
-  special_3_4: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_2.png"),
-  special_3_5: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_1.png"),
-  special_3_6: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_grey_level_6_2.png"),
-  special_3_7: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_1.png"),
-  special_3_8: require("../assets/Sprites/ModularBlocksTiles/Houses/Houses level 6/house_white_level_6_2.png"),
+  // Solar Panels (2 variants, same sprites all tiers)
+  solarpanel_1_1: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
+  solarpanel_1_2: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
+  solarpanel_2_1: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
+  solarpanel_2_2: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
+  solarpanel_3_1: require("../assets/Sprites/ModularBlocksTiles/solar_panels_1.png"),
+  solarpanel_3_2: require("../assets/Sprites/ModularBlocksTiles/solar_panels_2.png"),
 };
 
 function getBuildingSprite(building: PlacedBuilding): ImageSourcePropType {
@@ -444,7 +288,7 @@ function getBuildingSprite(building: PlacedBuilding): ImageSourcePropType {
 
   // Final fallback to variant 1 tier 1
   const finalFallback = `${building_type}_1_1`;
-  return buildingSpriteMap[finalFallback] || buildingSpriteMap["residential_1_1"];
+  return buildingSpriteMap[finalFallback] || buildingSpriteMap["house_1_1"];
 }
 
 function getGridTileType(row: number, col: number, gridRows: number, gridCols: number): TileType | null {
@@ -491,7 +335,7 @@ function buildPlotIndex(row: number, col: number, gridRows: number, gridCols: nu
   return index;
 }
 
-function getTileRotation(tileType: TileType): string {
+function getTileRotation(_tileType: TileType): string {
   return "0deg";
 }
 
@@ -511,16 +355,17 @@ function isoToGrid(
   gridRows: number,
   gridCols: number
 ): { row: number; col: number } | null {
-  const isoX = px - offsetX;
-  const isoY = py - offsetY;
+  // Offset by half a tile so the calculation is centered on each diamond
+  const isoX = px - offsetX - TILE_WIDTH / 2;
+  const isoY = py - offsetY - ISO_TILE_HEIGHT / 2;
   const halfW = TILE_WIDTH / 2;
   const halfH = ISO_TILE_HEIGHT / 2;
   const colMinusRow = isoX / halfW;
   const colPlusRow = isoY / halfH;
   const col = (colPlusRow + colMinusRow) / 2;
   const row = (colPlusRow - colMinusRow) / 2;
-  const rowCell = Math.floor(row);
-  const colCell = Math.floor(col);
+  const rowCell = Math.round(row);
+  const colCell = Math.round(col);
   if (rowCell < 0 || rowCell >= gridRows || colCell < 0 || colCell >= gridCols) return null;
   return { row: rowCell, col: colCell };
 }
@@ -618,37 +463,36 @@ export default function CityScreen() {
 
   const gridContainerRef = useRef<View>(null);
 
-  const handleTapPosition = (absoluteX: number, absoluteY: number) => {
-    gridContainerRef.current?.measureInWindow((winX, winY) => {
-      const scaleVal = scale.value;
-      const tx = translateX.value;
-      const ty = translateY.value;
-      const localX = (absoluteX - winX - tx) / scaleVal;
-      const localY = (absoluteY - winY - ty) / scaleVal;
-      const hit = isoToGrid(
-        localX,
-        localY,
-        isoBounds.offsetX,
-        isoBounds.offsetY,
-        GRID_ROWS,
-        GRID_COLS
-      );
-      if (hit && getGridTileType(hit.row, hit.col, GRID_ROWS, GRID_COLS) === "plot") {
-        const plotIndex = buildPlotIndex(hit.row, hit.col, GRID_ROWS, GRID_COLS);
-        if (plotIndex !== null) {
-          handlePlotPress(plotIndex);
-        }
+  const handleTapPosition = (ex: number, ey: number) => {
+    // e.x/e.y from gesture handler are relative to the Animated.View's
+    // rendered bounds on screen. Since the view has a scale transform,
+    // e.x = scale * contentX, so divide by scale to get content coords.
+    // The translate is already accounted for (it shifts the view's frame).
+    const scaleVal = scale.value;
+    const localX = ex / scaleVal;
+    const localY = ey / scaleVal;
+
+    const hit = isoToGrid(
+      localX,
+      localY,
+      isoBounds.offsetX,
+      isoBounds.offsetY,
+      GRID_ROWS,
+      GRID_COLS
+    );
+    if (hit && getGridTileType(hit.row, hit.col, GRID_ROWS, GRID_COLS) === "plot") {
+      const plotIndex = buildPlotIndex(hit.row, hit.col, GRID_ROWS, GRID_COLS);
+      if (plotIndex !== null) {
+        handlePlotPress(plotIndex);
       }
-    });
+    }
   };
 
   const singleTapGesture = Gesture.Tap()
     .numberOfTaps(1)
     .requireExternalGestureToFail(doubleTapGesture)
     .onEnd((e) => {
-      const x = e.absoluteX ?? e.x;
-      const y = e.absoluteY ?? e.y;
-      runOnJS(handleTapPosition)(x, y);
+      runOnJS(handleTapPosition)(e.x, e.y);
     });
 
   const composedGesture = Gesture.Simultaneous(
@@ -786,12 +630,13 @@ export default function CityScreen() {
           {shouldRenderBuilding && spriteStyle && (
             <Image
               source={getBuildingSprite(building)}
+              resizeMode="contain"
               style={[
                 styles.buildingSpriteBase,
                 {
                   width: spriteStyle.width,
                   height: spriteStyle.height,
-                  top: buildingTopInContainer,
+                  top: buildingTopInContainer + spriteStyle.top,
                   left: spriteStyle.left,
                 },
               ]}
@@ -841,7 +686,7 @@ export default function CityScreen() {
             <Text style={styles.subtitle}>Build your city, one habit at a time</Text>
           </View>
           <View style={styles.tokenDisplay}>
-            <Text style={styles.tokenIcon}>🪙</Text>
+            <Image source={require("../assets/images/build_coin.png")} style={styles.tokenIconImage} />
             <Text style={styles.tokenValue}>{tokens}</Text>
           </View>
         </View>
@@ -922,6 +767,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 10,
+    zIndex: 10,
   },
   headerTop: {
     flexDirection: "row",
@@ -950,6 +796,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginRight: 6,
   },
+  tokenIconImage: {
+    width: 26,
+    height: 26,
+    marginRight: 6,
+  },
   tokenValue: {
     fontSize: 18,
     fontWeight: "bold",
@@ -960,6 +811,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#87CEEB", // Sky blue for a more vibrant look
+    overflow: "hidden",
   },
   gridContainer: {
     position: "relative",
@@ -995,6 +847,7 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     padding: 16,
+    zIndex: 10,
   },
   statsRow: {
     flexDirection: "row",

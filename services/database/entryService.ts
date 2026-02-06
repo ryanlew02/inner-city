@@ -52,6 +52,19 @@ export async function upsertEntry(entry: Omit<HabitEntry, 'id' | 'created_at'>):
   }
 }
 
+export async function getEntriesForHabitInRange(
+  habitId: string,
+  startDate: string,
+  endDate: string
+): Promise<HabitEntry[]> {
+  const db = await getDatabase();
+  const result = await db.getAllAsync<HabitEntry>(
+    `SELECT * FROM habit_entries WHERE habit_id = ? AND date >= ? AND date <= ?`,
+    [habitId, startDate, endDate]
+  );
+  return result;
+}
+
 export async function deleteEntry(id: string): Promise<void> {
   const db = await getDatabase();
   await db.execAsync(`DELETE FROM habit_entries WHERE id = '${id}'`);
