@@ -1,18 +1,21 @@
 import { Drawer } from "expo-router/drawer";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function DrawerLayout() {
+  const { colors } = useTheme();
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Drawer
         initialRouteName="habits"
         screenOptions={{
           headerShown: true,
-          drawerStyle: { backgroundColor: "#F2F4F7" },
-          headerStyle: { backgroundColor: "#F2F4F7" },
-          headerTintColor: "#111827",
-          drawerActiveTintColor: "#3B82F6",
-          drawerInactiveTintColor: "#64748B",
+          drawerStyle: { backgroundColor: colors.drawerBackground },
+          headerStyle: { backgroundColor: colors.headerBackground },
+          headerTintColor: colors.text,
+          drawerActiveTintColor: colors.drawerActiveText,
+          drawerInactiveTintColor: colors.drawerInactiveText,
         }}
       >
         <Drawer.Screen
@@ -26,6 +29,10 @@ export default function DrawerLayout() {
         <Drawer.Screen
           name="stats"
           options={{ title: "Stats", drawerLabel: "Stats" }}
+        />
+        <Drawer.Screen
+          name="settings"
+          options={{ title: "Settings", drawerLabel: "Settings" }}
         />
       </Drawer>
     </GestureHandlerRootView>

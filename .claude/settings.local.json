@@ -27,7 +27,8 @@
       "Bash(ls:*)",
       "Bash(del \"C:\\\\Users\\\\ryanl\\\\OneDrive\\\\Desktop\\\\inner-city\\\\screens\\\\WeekScreen.tsx\")",
       "Bash(del \"C:\\\\Users\\\\ryanl\\\\OneDrive\\\\Desktop\\\\inner-city\\\\app\\\\\\(drawer\\)\\\\week.tsx\")",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(del:*)"
     ]
   }
 }

@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   View,
   Text,
   Image,
-  StyleSheet,
   TouchableOpacity,
   Animated,
   Dimensions,
@@ -12,6 +11,8 @@ import {
   Pressable,
   Alert,
 } from "react-native";
+import { useTheme } from "../context/ThemeContext";
+import { ThemeColors } from "../constants/Colors";
 
 const buildCoin = require("../assets/images/build_coin.png");
 import {
@@ -19,6 +20,7 @@ import {
   PlacedBuilding,
   PURCHASABLE_BUILDING_TYPES,
   BUILDING_COST,
+  getDemolishRefund,
   getUpgradeCost,
   MAX_TIER,
 } from "../context/BuildingContext";
@@ -34,6 +36,7 @@ interface BuildingSheetProps {
   tokens: number;
   onSelectBuildingType: (type: BuildingType) => void;
   onUpgrade: () => void;
+  onDemolish: () => void;
   onAutoBuildOne: () => void;
   onAutoBuildAll: () => void;
 }
@@ -47,11 +50,11 @@ const BUILDING_LABELS: Record<BuildingType, string> = {
 };
 
 const BUILDING_ICONS: Record<BuildingType, string> = {
-  apartment: "🏢",
-  house: "🏠",
-  office: "🏬",
-  factory: "🏭",
-  solarpanel: "☀️",
+  apartment: "\u{1F3E2}",
+  house: "\u{1F3E0}",
+  office: "\u{1F3EC}",
+  factory: "\u{1F3ED}",
+  solarpanel: "\u2600\uFE0F",
 };
 
 export default function BuildingSheet({
@@ -62,9 +65,12 @@ export default function BuildingSheet({
   tokens,
   onSelectBuildingType,
   onUpgrade,
+  onDemolish,
   onAutoBuildOne,
   onAutoBuildAll,
 }: BuildingSheetProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
 
   useEffect(() => {
@@ -102,6 +108,19 @@ export default function BuildingSheet({
     if (canAffordUpgrade) {
       onUpgrade();
     }
+  };
+
+  const demolishRefund = selectedBuilding ? getDemolishRefund(selectedBuilding.tier) : 0;
+
+  const handleDemolish = () => {
+    Alert.alert(
+      "Demolish Building?",
+      `This will destroy this building and refund ${demolishRefund} token${demolishRefund !== 1 ? 's' : ''}. This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Demolish", style: "destructive", onPress: onDemolish },
+      ]
+    );
   };
 
   const handleAutoBuildAll = () => {
@@ -171,7 +190,7 @@ export default function BuildingSheet({
                     disabled={!canAffordBuilding}
                   >
                     <View style={styles.autobuildButtonContent}>
-                      <Text style={styles.autobuildButtonEmoji}>🏗️</Text>
+                      <Text style={styles.autobuildButtonEmoji}>{"\u{1F3D7}\uFE0F"}</Text>
                       <View style={styles.autobuildButtonText}>
                         <Text style={[
                           styles.autobuildButtonTitle,
@@ -199,7 +218,7 @@ export default function BuildingSheet({
                     disabled={buildingsCanAfford < 1}
                   >
                     <View style={styles.autobuildButtonContent}>
-                      <Text style={styles.autobuildButtonEmoji}>🏙️</Text>
+                      <Text style={styles.autobuildButtonEmoji}>{"\u{1F3D9}\uFE0F"}</Text>
                       <View style={styles.autobuildButtonText}>
                         <Text style={[
                           styles.autobuildButtonTitle,
@@ -314,6 +333,15 @@ export default function BuildingSheet({
                       Need {upgradeCost - tokens} more tokens
                     </Text>
                   )}
+
+                  <TouchableOpacity
+                    style={styles.demolishButton}
+                    onPress={handleDemolish}
+                  >
+                    <Text style={styles.demolishButtonText}>
+                      Demolish (refund {demolishRefund} token{demolishRefund !== 1 ? 's' : ''})
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
@@ -328,246 +356,262 @@ export default function BuildingSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: SHEET_HEIGHT,
-    paddingBottom: 40,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: "#D1D5DB",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1F2937",
-  },
-  tokenBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FEF3C7",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  tokenIcon: {
-    fontSize: 16,
-    marginRight: 4,
-  },
-  tokenIconImage: {
-    width: 18,
-    height: 18,
-    marginRight: 4,
-  },
-  tokenIconImageSmall: {
-    width: 16,
-    height: 16,
-    marginLeft: 4,
-  },
-  upgradeButtonRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tokenCount: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#92400E",
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  costInfo: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  buildingGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    paddingBottom: 16,
-  },
-  buildingOption: {
-    width: "30%",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    padding: 12,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  buildingOptionDisabled: {
-    opacity: 0.5,
-  },
-  buildingIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  buildingLabel: {
-    fontSize: 12,
-    color: "#374151",
-    textAlign: "center",
-  },
-  textDisabled: {
-    color: "#9CA3AF",
-  },
-  insufficientTokens: {
-    fontSize: 14,
-    color: "#DC2626",
-    textAlign: "center",
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  upgradeContentCompact: {
-    paddingVertical: 8,
-  },
-  buildingInfoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  buildingIconMedium: {
-    fontSize: 48,
-    marginRight: 16,
-  },
-  buildingDetails: {
-    flex: 1,
-  },
-  buildingNameCompact: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 6,
-  },
-  tierBadgeSmall: {
-    backgroundColor: "#3B82F6",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    alignSelf: "flex-start",
-    marginBottom: 6,
-  },
-  tierTextSmall: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 12,
-  },
-  builtDate: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  upgradeButtonCompact: {
-    backgroundColor: "#3B82F6",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  upgradeButtonDisabled: {
-    backgroundColor: "#D1D5DB",
-  },
-  upgradeButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  maxTierMessageCompact: {
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#ECFDF5",
-    borderRadius: 12,
-  },
-  maxTierTextCompact: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#059669",
-  },
-  insufficientTokensCompact: {
-    fontSize: 13,
-    color: "#DC2626",
-    textAlign: "center",
-    marginTop: 8,
-  },
-  closeButton: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 12,
-  },
-  closeButtonText: {
-    fontSize: 16,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  autobuildContent: {
-    paddingVertical: 8,
-  },
-  autobuildDescription: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  autobuildButton: {
-    backgroundColor: "#3B82F6",
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-  },
-  autobuildButtonAll: {
-    backgroundColor: "#8B5CF6",
-  },
-  autobuildButtonDisabled: {
-    backgroundColor: "#D1D5DB",
-  },
-  autobuildButtonContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  autobuildButtonEmoji: {
-    fontSize: 36,
-    marginRight: 16,
-  },
-  autobuildButtonText: {
-    flex: 1,
-  },
-  autobuildButtonTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    marginBottom: 4,
-  },
-  autobuildButtonCost: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.8)",
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return {
+    overlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: "flex-end" as const,
+    },
+    sheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      maxHeight: SHEET_HEIGHT,
+      paddingBottom: 40,
+    },
+    handle: {
+      width: 40,
+      height: 4,
+      backgroundColor: colors.handleBar,
+      borderRadius: 2,
+      alignSelf: "center" as const,
+      marginTop: 12,
+      marginBottom: 8,
+    },
+    header: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: "bold" as const,
+      color: colors.text,
+    },
+    tokenBadge: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: colors.tokenBadgeBackground,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
+    },
+    tokenIcon: {
+      fontSize: 16,
+      marginRight: 4,
+    },
+    tokenIconImage: {
+      width: 18,
+      height: 18,
+      marginRight: 4,
+    },
+    tokenIconImageSmall: {
+      width: 16,
+      height: 16,
+      marginLeft: 4,
+    },
+    upgradeButtonRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    tokenCount: {
+      fontSize: 16,
+      fontWeight: "bold" as const,
+      color: colors.tokenBadgeText,
+    },
+    content: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+    },
+    costInfo: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: "center" as const,
+      marginBottom: 16,
+    },
+    buildingGrid: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      justifyContent: "space-between" as const,
+      paddingBottom: 16,
+    },
+    buildingOption: {
+      width: "30%" as const,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 12,
+      padding: 12,
+      alignItems: "center" as const,
+      marginBottom: 12,
+    },
+    buildingOptionDisabled: {
+      opacity: 0.5,
+    },
+    buildingIcon: {
+      fontSize: 32,
+      marginBottom: 8,
+    },
+    buildingLabel: {
+      fontSize: 12,
+      color: colors.text,
+      textAlign: "center" as const,
+    },
+    textDisabled: {
+      color: colors.textTertiary,
+    },
+    insufficientTokens: {
+      fontSize: 14,
+      color: colors.danger,
+      textAlign: "center" as const,
+      marginTop: 8,
+      marginBottom: 16,
+    },
+    upgradeContentCompact: {
+      paddingVertical: 8,
+    },
+    buildingInfoRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+    },
+    buildingIconMedium: {
+      fontSize: 48,
+      marginRight: 16,
+    },
+    buildingDetails: {
+      flex: 1,
+    },
+    buildingNameCompact: {
+      fontSize: 18,
+      fontWeight: "bold" as const,
+      color: colors.text,
+      marginBottom: 6,
+    },
+    tierBadgeSmall: {
+      backgroundColor: colors.accent,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+      alignSelf: "flex-start" as const,
+      marginBottom: 6,
+    },
+    tierTextSmall: {
+      color: colors.textInverse,
+      fontWeight: "600" as const,
+      fontSize: 12,
+    },
+    builtDate: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    upgradeButtonCompact: {
+      backgroundColor: colors.accent,
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: "center" as const,
+    },
+    upgradeButtonDisabled: {
+      backgroundColor: colors.handleBar,
+    },
+    upgradeButtonText: {
+      color: colors.textInverse,
+      fontWeight: "bold" as const,
+      fontSize: 16,
+    },
+    maxTierMessageCompact: {
+      alignItems: "center" as const,
+      padding: 16,
+      backgroundColor: colors.successLight,
+      borderRadius: 12,
+    },
+    maxTierTextCompact: {
+      fontSize: 16,
+      fontWeight: "bold" as const,
+      color: colors.success,
+    },
+    insufficientTokensCompact: {
+      fontSize: 13,
+      color: colors.danger,
+      textAlign: "center" as const,
+      marginTop: 8,
+    },
+    closeButton: {
+      marginHorizontal: 20,
+      marginTop: 16,
+      paddingVertical: 14,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+    },
+    closeButtonText: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      fontWeight: "500" as const,
+    },
+    demolishButton: {
+      marginTop: 16,
+      paddingVertical: 12,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: colors.dangerBorder,
+      borderRadius: 12,
+      backgroundColor: colors.dangerLight,
+    },
+    demolishButtonText: {
+      fontSize: 14,
+      color: colors.danger,
+      fontWeight: "500" as const,
+    },
+    autobuildContent: {
+      paddingVertical: 8,
+    },
+    autobuildDescription: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: "center" as const,
+      marginBottom: 24,
+    },
+    autobuildButton: {
+      backgroundColor: colors.accent,
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 12,
+    },
+    autobuildButtonAll: {
+      backgroundColor: "#8B5CF6",
+    },
+    autobuildButtonDisabled: {
+      backgroundColor: colors.handleBar,
+    },
+    autobuildButtonContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+    },
+    autobuildButtonEmoji: {
+      fontSize: 36,
+      marginRight: 16,
+    },
+    autobuildButtonText: {
+      flex: 1,
+    },
+    autobuildButtonTitle: {
+      fontSize: 18,
+      fontWeight: "bold" as const,
+      color: colors.textInverse,
+      marginBottom: 4,
+    },
+    autobuildButtonCost: {
+      fontSize: 14,
+      color: "rgba(255, 255, 255, 0.8)",
+    },
+  };
+}

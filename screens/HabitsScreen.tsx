@@ -7,7 +7,6 @@ import {
   Modal,
   Platform,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -16,6 +15,8 @@ import {
 import { Gesture, GestureDetector, GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { useHabits } from "../context/HabitsContext";
+import { useTheme } from "../context/ThemeContext";
+import { ThemeColors } from "../constants/Colors";
 import { Habit, parseScheduleJson } from "../types/habit";
 
 const MIN_SWIPE_CHECK_PX = 60;
@@ -32,9 +33,11 @@ type CalendarModalProps = {
   selectedDate: string;
   todayDate: string;
   onSelectDate: (date: string) => void;
+  colors: ThemeColors;
 };
 
-function CalendarModal({ visible, onClose, selectedDate, todayDate, onSelectDate }: CalendarModalProps) {
+function CalendarModal({ visible, onClose, selectedDate, todayDate, onSelectDate, colors }: CalendarModalProps) {
+  const calendarStyles = createCalendarStyles(colors);
   const [viewingMonth, setViewingMonth] = useState(() => {
     const date = new Date(selectedDate + 'T00:00:00');
     return { year: date.getFullYear(), month: date.getMonth() };
@@ -315,160 +318,6 @@ function CalendarModal({ visible, onClose, selectedDate, todayDate, onSelectDate
   );
 }
 
-const calendarStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    width: 320,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  monthNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  monthNavButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  monthNavButtonDisabled: {
-    backgroundColor: '#F9FAFB',
-  },
-  monthNavArrow: {
-    fontSize: 24,
-    color: '#374151',
-    fontWeight: '300',
-  },
-  monthNavArrowDisabled: {
-    color: '#D1D5DB',
-  },
-  monthTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#0F172A',
-    textAlign: 'center',
-  },
-  monthTitleHint: {
-    fontSize: 11,
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  monthGrid: {
-    paddingVertical: 8,
-  },
-  monthRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  monthCell: {
-    flex: 1,
-    marginHorizontal: 4,
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-  },
-  currentMonthCell: {
-    backgroundColor: '#22C55E',
-  },
-  selectedMonthCell: {
-    backgroundColor: '#E0F2FE',
-    borderWidth: 2,
-    borderColor: '#0EA5E9',
-  },
-  monthCellText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  currentMonthText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  selectedMonthText: {
-    color: '#0369A1',
-    fontWeight: '600',
-  },
-  disabledMonthText: {
-    color: '#D1D5DB',
-  },
-  weekRow: {
-    flexDirection: 'row',
-  },
-  dayCell: {
-    flex: 1,
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 2,
-  },
-  dayHeader: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#9CA3AF',
-  },
-  dayNumber: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dayText: {
-    fontSize: 15,
-    color: '#374151',
-  },
-  todayCircle: {
-    backgroundColor: '#22C55E',
-  },
-  todayText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  selectedCircle: {
-    backgroundColor: '#E0F2FE',
-    borderWidth: 2,
-    borderColor: '#0EA5E9',
-  },
-  selectedText: {
-    color: '#0369A1',
-    fontWeight: '600',
-  },
-  futureText: {
-    color: '#D1D5DB',
-  },
-  todayButton: {
-    marginTop: 16,
-    backgroundColor: '#22C55E',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  todayButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
-
 type RightSwipeGestureWrapperProps = {
   habit: Habit;
   onSwipeMoveRef: React.MutableRefObject<(habitId: string, tx: number) => void>;
@@ -501,7 +350,7 @@ function RightSwipeGestureWrapper({ habit, onSwipeMoveRef, onSwipeEndRef, childr
 
   return (
     <GestureDetector gesture={panGesture}>
-      <View style={styles.swipeRowWrapper}>{children}</View>
+      <View style={{ flex: 1, minHeight: 0 }}>{children}</View>
     </GestureDetector>
   );
 }
@@ -515,9 +364,11 @@ type HabitTileProps = {
   onLongPress: () => void;
   swipeIncrement?: number;
   swipePreviewValue?: number | null;
+  colors: ThemeColors;
 };
 
-function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, onLongPress, swipeIncrement = 0, swipePreviewValue = null }: HabitTileProps) {
+function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, onLongPress, swipeIncrement = 0, swipePreviewValue = null, colors }: HabitTileProps) {
+  const styles = createStyles(colors);
   const isProgressType = habit.target_type !== "check";
   const scheduleData = parseScheduleJson(habit.schedule_json);
   const isQuitHabit = scheduleData.habit_mode === 'quit';
@@ -544,7 +395,7 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
       ? `+${swipeIncrement} ${getUnitLabel()}`.trim()
       : null;
 
-  const color = habit.color || "#22C55E";
+  const color = habit.color || colors.success;
 
   return (
     <TouchableOpacity
@@ -588,8 +439,8 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
       <View
         style={[
           styles.checkbox,
-          { borderColor: habit.color || "#22C55E" },
-          completed && { backgroundColor: habit.color || "#22C55E" },
+          { borderColor: habit.color || colors.success },
+          completed && { backgroundColor: habit.color || colors.success },
         ]}
       >
         {completed && <Text style={styles.checkmark}>✓</Text>}
@@ -622,7 +473,7 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
         ) : null}
       </View>
       {progressLabel !== null && (
-        <View style={[styles.swipeFeedback, { backgroundColor: habit.color ? `${habit.color}99` : "#22C55E99" }]}>
+        <View style={[styles.swipeFeedback, { backgroundColor: habit.color ? `${habit.color}99` : `${colors.success}99` }]}>
           <Text style={styles.swipeFeedbackText}>{progressLabel}</Text>
         </View>
       )}
@@ -644,6 +495,8 @@ function addDays(dateStr: string, days: number): string {
 
 export default function HabitsScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const {
     habits,
     toggleHabit,
@@ -810,7 +663,7 @@ export default function HabitsScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#22C55E" />
+        <ActivityIndicator size="large" color={colors.success} />
         <Text style={styles.loadingText}>Loading habits...</Text>
       </View>
     );
@@ -873,6 +726,7 @@ export default function HabitsScreen() {
         selectedDate={viewingDate}
         todayDate={currentDate}
         onSelectDate={setViewingDate}
+        colors={colors}
       />
 
       {!isViewingToday && (
@@ -919,6 +773,7 @@ export default function HabitsScreen() {
                     onLongPress={() => handleOpenOptions(habit)}
                     swipeIncrement={swipeIncrement}
                     swipePreviewValue={isSwipingThis ? swipePreviewValue : null}
+                    colors={colors}
                   />
                 </Swipeable>
               </RightSwipeGestureWrapper>
@@ -1020,7 +875,7 @@ export default function HabitsScreen() {
                 onChangeText={(text) => setProgressValue(text.replace(/[^0-9]/g, ''))}
                 keyboardType="numeric"
                 placeholder="0"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.textTertiary}
                 textAlign="center"
               />
 
@@ -1054,441 +909,595 @@ export default function HabitsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F1F5F9",
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: "#F1F5F9",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "#64748B",
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: "#0F172A",
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#64748B",
-    marginTop: 4,
-  },
-  dateNavigator: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: "#FFFFFF",
-    marginHorizontal: 20,
-    borderRadius: 12,
-    marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  dateNavButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  dateNavButtonDisabled: {
-    backgroundColor: "#F9FAFB",
-  },
-  dateNavArrow: {
-    fontSize: 28,
-    color: "#374151",
-    fontWeight: "300",
-    marginTop: -2,
-  },
-  dateNavArrowDisabled: {
-    color: "#D1D5DB",
-  },
-  dateDisplay: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 16,
-  },
-  dateText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#0F172A",
-  },
-  tapToOpenCalendar: {
-    fontSize: 11,
-    color: "#94A3B8",
-    marginTop: 2,
-  },
-  pastDateBanner: {
-    backgroundColor: "#FEF3C7",
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    marginHorizontal: 20,
-    marginBottom: 8,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  pastDateText: {
-    fontSize: 13,
-    color: "#92400E",
-    fontWeight: "500",
-  },
-  habitsList: {
-    flex: 1,
-  },
-  habitsContent: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 100,
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingTop: 64,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: "#94A3B8",
-    marginTop: 8,
-  },
-  habitItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    overflow: "hidden",
-    position: "relative",
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-  },
-  progressFill: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
-  },
-  progressFillSwipe: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    borderTopRightRadius: 10,
-    borderBottomRightRadius: 10,
-    zIndex: 1,
-  },
-  completedFill: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    right: 0,
-    borderRadius: 14,
-  },
-  resetAction: {
-    backgroundColor: "#F59E0B",
-    justifyContent: "center",
-    alignItems: "center",
-    width: 72,
-    borderRadius: 14,
-    marginBottom: 12,
-    marginLeft: 6,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-  },
-  resetActionText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  swipeRowWrapper: {
-    flex: 1,
-    minHeight: 0,
-  },
-  swipeFeedback: {
-    position: "absolute",
-    right: 18,
-    top: 0,
-    bottom: 0,
-    justifyContent: "center",
-    paddingHorizontal: 14,
-    borderRadius: 10,
-  },
-  swipeFeedbackText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  checkbox: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 14,
-  },
-  checkmark: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "bold",
-  },
-  habitInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  habitHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  habitIcon: {
-    fontSize: 18,
-    marginRight: 8,
-  },
-  habitText: {
-    fontSize: 16,
-    color: "#0F172A",
-    flex: 1,
-    fontWeight: "500",
-  },
-  habitTextCompleted: {
-    color: "#94A3B8",
-    textDecorationLine: "line-through",
-  },
-  habitDescription: {
-    fontSize: 13,
-    color: "#94A3B8",
-    marginTop: 2,
-  },
-  habitProgress: {
-    fontSize: 13,
-    color: "#64748B",
-    marginTop: 2,
-    fontWeight: "500",
-  },
-  completedBanner: {
-    backgroundColor: "#22C55E",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    marginHorizontal: 20,
-    marginBottom: 80,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-  completedText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  fab: {
-    position: "absolute",
-    right: 20,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#22C55E",
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 3,
-    shadowColor: "#22C55E",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  fabText: {
-    fontSize: 32,
-    color: "#fff",
-    fontWeight: "300",
-    marginTop: -2,
-  },
-  optionsModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  optionsModalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    paddingBottom: 30,
-  },
-  optionsHeader: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  optionsTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#111827",
-    textAlign: "center",
-  },
-  optionItem: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  optionItemCancel: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-  },
-  optionItemText: {
-    fontSize: 16,
-    color: "#374151",
-    textAlign: "center",
-  },
-  optionItemTextDanger: {
-    fontSize: 16,
-    color: "#EF4444",
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  habitItemDimmed: {
-    opacity: 0.5,
-  },
-  habitTextDimmed: {
-    color: "#9CA3AF",
-  },
-  notScheduledText: {
-    fontSize: 12,
-    color: "#9CA3AF",
-    marginTop: 4,
-    fontStyle: "italic",
-  },
-  quitBadge: {
-    backgroundColor: "#EF4444",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: 8,
-  },
-  quitBadgeText: {
-    fontSize: 10,
-    color: "#fff",
-    fontWeight: "700",
-  },
-  progressModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  progressModalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 24,
-    width: "85%",
-    maxWidth: 340,
-    alignItems: "center",
-  },
-  progressModalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  progressModalSubtitle: {
-    fontSize: 14,
-    color: "#64748B",
-    marginBottom: 24,
-  },
-  progressInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  progressButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  progressButtonText: {
-    fontSize: 24,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  progressInput: {
-    width: 100,
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#111827",
-    textAlign: "center",
-    padding: 8,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-  },
-  progressUnitLabel: {
-    fontSize: 14,
-    color: "#9CA3AF",
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  buttonRow: {
-    flexDirection: "row",
-    gap: 12,
-    width: "100%",
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  saveButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: "#22C55E",
-    alignItems: "center",
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-  },
-});
+function createCalendarStyles(colors: ThemeColors) {
+  return {
+    overlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    container: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 16,
+      width: 320,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    monthNav: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      marginBottom: 16,
+    },
+    monthNavButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.buttonBackground,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    monthNavButtonDisabled: {
+      backgroundColor: colors.backgroundSecondary,
+    },
+    monthNavArrow: {
+      fontSize: 24,
+      color: colors.text,
+      fontWeight: "300" as const,
+    },
+    monthNavArrowDisabled: {
+      color: colors.handleBar,
+    },
+    monthTitle: {
+      fontSize: 18,
+      fontWeight: "600" as const,
+      color: colors.text,
+      textAlign: "center" as const,
+    },
+    monthTitleHint: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      textAlign: "center" as const,
+      marginTop: 2,
+    },
+    monthGrid: {
+      paddingVertical: 8,
+    },
+    monthRow: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      marginBottom: 8,
+    },
+    monthCell: {
+      flex: 1,
+      marginHorizontal: 4,
+      paddingVertical: 14,
+      borderRadius: 10,
+      backgroundColor: colors.buttonBackground,
+      alignItems: "center" as const,
+    },
+    currentMonthCell: {
+      backgroundColor: colors.success,
+    },
+    selectedMonthCell: {
+      backgroundColor: colors.accentLight,
+      borderWidth: 2,
+      borderColor: colors.accent,
+    },
+    monthCellText: {
+      fontSize: 15,
+      fontWeight: "500" as const,
+      color: colors.text,
+    },
+    currentMonthText: {
+      color: colors.textInverse,
+      fontWeight: "600" as const,
+    },
+    selectedMonthText: {
+      color: colors.accent,
+      fontWeight: "600" as const,
+    },
+    disabledMonthText: {
+      color: colors.handleBar,
+    },
+    weekRow: {
+      flexDirection: "row" as const,
+    },
+    dayCell: {
+      flex: 1,
+      aspectRatio: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: 2,
+    },
+    dayHeader: {
+      fontSize: 12,
+      fontWeight: "600" as const,
+      color: colors.textTertiary,
+    },
+    dayNumber: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    dayText: {
+      fontSize: 15,
+      color: colors.text,
+    },
+    todayCircle: {
+      backgroundColor: colors.success,
+    },
+    todayText: {
+      color: colors.textInverse,
+      fontWeight: "600" as const,
+    },
+    selectedCircle: {
+      backgroundColor: colors.accentLight,
+      borderWidth: 2,
+      borderColor: colors.accent,
+    },
+    selectedText: {
+      color: colors.accent,
+      fontWeight: "600" as const,
+    },
+    futureText: {
+      color: colors.handleBar,
+    },
+    todayButton: {
+      marginTop: 16,
+      backgroundColor: colors.success,
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: "center" as const,
+    },
+    todayButtonText: {
+      color: colors.textInverse,
+      fontSize: 16,
+      fontWeight: "600" as const,
+    },
+  };
+}
+
+function createStyles(colors: ThemeColors) {
+  return {
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    loadingContainer: {
+      flex: 1,
+      backgroundColor: colors.background,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 16,
+      color: colors.textSecondary,
+    },
+    header: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 12,
+    },
+    title: {
+      fontSize: 26,
+      fontWeight: "700" as const,
+      color: colors.text,
+      letterSpacing: -0.5,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      marginTop: 4,
+    },
+    dateNavigator: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      backgroundColor: colors.card,
+      marginHorizontal: 20,
+      borderRadius: 12,
+      marginBottom: 8,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+      elevation: 1,
+    },
+    dateNavButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.buttonBackground,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    dateNavButtonDisabled: {
+      backgroundColor: colors.backgroundSecondary,
+    },
+    dateNavArrow: {
+      fontSize: 28,
+      color: colors.text,
+      fontWeight: "300" as const,
+      marginTop: -2,
+    },
+    dateNavArrowDisabled: {
+      color: colors.handleBar,
+    },
+    dateDisplay: {
+      flex: 1,
+      alignItems: "center" as const,
+      paddingHorizontal: 16,
+    },
+    dateText: {
+      fontSize: 18,
+      fontWeight: "600" as const,
+      color: colors.text,
+    },
+    tapToOpenCalendar: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    pastDateBanner: {
+      backgroundColor: colors.pastDateBanner,
+      paddingVertical: 8,
+      paddingHorizontal: 20,
+      marginHorizontal: 20,
+      marginBottom: 8,
+      borderRadius: 8,
+      alignItems: "center" as const,
+    },
+    pastDateText: {
+      fontSize: 13,
+      color: colors.pastDateText,
+      fontWeight: "500" as const,
+    },
+    habitsList: {
+      flex: 1,
+    },
+    habitsContent: {
+      paddingHorizontal: 20,
+      paddingTop: 4,
+      paddingBottom: 100,
+    },
+    emptyState: {
+      alignItems: "center" as const,
+      paddingTop: 64,
+    },
+    emptyText: {
+      fontSize: 18,
+      fontWeight: "600" as const,
+      color: colors.textSecondary,
+    },
+    emptySubtext: {
+      fontSize: 14,
+      color: colors.textTertiary,
+      marginTop: 8,
+    },
+    habitItem: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: colors.card,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
+      borderRadius: 14,
+      marginBottom: 12,
+      borderLeftWidth: 4,
+      overflow: "hidden" as const,
+      position: "relative" as const,
+      elevation: 1,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 3,
+    },
+    progressFill: {
+      position: "absolute" as const,
+      left: 0,
+      top: 0,
+      bottom: 0,
+      borderTopLeftRadius: 14,
+      borderBottomLeftRadius: 14,
+    },
+    progressFillSwipe: {
+      position: "absolute" as const,
+      top: 0,
+      bottom: 0,
+      borderTopRightRadius: 10,
+      borderBottomRightRadius: 10,
+      zIndex: 1,
+    },
+    completedFill: {
+      position: "absolute" as const,
+      left: 0,
+      top: 0,
+      bottom: 0,
+      right: 0,
+      borderRadius: 14,
+    },
+    resetAction: {
+      backgroundColor: colors.warning,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      width: 72,
+      borderRadius: 14,
+      marginBottom: 12,
+      marginLeft: 6,
+      elevation: 1,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 2,
+    },
+    resetActionText: {
+      color: colors.textInverse,
+      fontWeight: "600" as const,
+      fontSize: 13,
+    },
+    swipeFeedback: {
+      position: "absolute" as const,
+      right: 18,
+      top: 0,
+      bottom: 0,
+      justifyContent: "center" as const,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+    },
+    swipeFeedbackText: {
+      color: colors.textInverse,
+      fontWeight: "700" as const,
+      fontSize: 14,
+    },
+    checkbox: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 2,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      marginRight: 14,
+    },
+    checkmark: {
+      color: colors.textInverse,
+      fontSize: 15,
+      fontWeight: "bold" as const,
+    },
+    habitInfo: {
+      flex: 1,
+      minWidth: 0,
+    },
+    habitHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+    },
+    habitIcon: {
+      fontSize: 18,
+      marginRight: 8,
+    },
+    habitText: {
+      fontSize: 16,
+      color: colors.text,
+      flex: 1,
+      fontWeight: "500" as const,
+    },
+    habitTextCompleted: {
+      color: colors.textTertiary,
+      textDecorationLine: "line-through" as const,
+    },
+    habitDescription: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    habitProgress: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 2,
+      fontWeight: "500" as const,
+    },
+    completedBanner: {
+      backgroundColor: colors.success,
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+      marginHorizontal: 20,
+      marginBottom: 80,
+      borderRadius: 14,
+      alignItems: "center" as const,
+    },
+    completedText: {
+      color: colors.textInverse,
+      fontSize: 16,
+      fontWeight: "600" as const,
+    },
+    fab: {
+      position: "absolute" as const,
+      right: 20,
+      bottom: 24,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: colors.success,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      elevation: 3,
+      shadowColor: colors.success,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+    },
+    fabText: {
+      fontSize: 32,
+      color: colors.textInverse,
+      fontWeight: "300" as const,
+      marginTop: -2,
+    },
+    optionsModalOverlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: "flex-end" as const,
+    },
+    optionsModalContent: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingTop: 20,
+      paddingBottom: 30,
+    },
+    optionsHeader: {
+      paddingHorizontal: 20,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    optionsTitle: {
+      fontSize: 18,
+      fontWeight: "600" as const,
+      color: colors.text,
+      textAlign: "center" as const,
+    },
+    optionItem: {
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    optionItemCancel: {
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+    },
+    optionItemText: {
+      fontSize: 16,
+      color: colors.text,
+      textAlign: "center" as const,
+    },
+    optionItemTextDanger: {
+      fontSize: 16,
+      color: colors.danger,
+      textAlign: "center" as const,
+      fontWeight: "500" as const,
+    },
+    habitItemDimmed: {
+      opacity: 0.5,
+    },
+    habitTextDimmed: {
+      color: colors.textTertiary,
+    },
+    notScheduledText: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 4,
+      fontStyle: "italic" as const,
+    },
+    quitBadge: {
+      backgroundColor: colors.danger,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+      marginLeft: 8,
+    },
+    quitBadgeText: {
+      fontSize: 10,
+      color: colors.textInverse,
+      fontWeight: "700" as const,
+    },
+    progressModalOverlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    progressModalContent: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 24,
+      width: "85%" as const,
+      maxWidth: 340,
+      alignItems: "center" as const,
+    },
+    progressModalTitle: {
+      fontSize: 20,
+      fontWeight: "bold" as const,
+      color: colors.text,
+      marginBottom: 4,
+    },
+    progressModalSubtitle: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      marginBottom: 24,
+    },
+    progressInputRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 16,
+    },
+    progressButton: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.buttonBackground,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    progressButtonText: {
+      fontSize: 24,
+      fontWeight: "600" as const,
+      color: colors.text,
+    },
+    progressInput: {
+      width: 100,
+      fontSize: 32,
+      fontWeight: "bold" as const,
+      color: colors.text,
+      textAlign: "center" as const,
+      padding: 8,
+      backgroundColor: colors.buttonBackground,
+      borderRadius: 12,
+    },
+    progressUnitLabel: {
+      fontSize: 14,
+      color: colors.textTertiary,
+      marginTop: 8,
+      marginBottom: 24,
+    },
+    buttonRow: {
+      flexDirection: "row" as const,
+      gap: 12,
+      width: "100%" as const,
+    },
+    cancelButton: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 10,
+      backgroundColor: colors.buttonBackground,
+      alignItems: "center" as const,
+    },
+    cancelButtonText: {
+      fontSize: 16,
+      fontWeight: "600" as const,
+      color: colors.text,
+    },
+    saveButton: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 10,
+      backgroundColor: colors.success,
+      alignItems: "center" as const,
+    },
+    saveButtonText: {
+      fontSize: 16,
+      fontWeight: "600" as const,
+      color: colors.textInverse,
+    },
+  };
+}

@@ -72,6 +72,11 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
         created_at INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
+
       INSERT OR IGNORE INTO user_stats (id, tokens) VALUES ('user', 0);
     `);
 

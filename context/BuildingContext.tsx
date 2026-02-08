@@ -5,6 +5,8 @@ import {
   BuildingType,
   canPlaceAtPosition,
   clearAllBuildings as clearAllBuildingsDb,
+  demolishBuilding as demolishBuildingDb,
+  getDemolishRefund,
   findBuildingAtPosition,
   findNextAvailablePosition,
   getPlacedBuildings,
@@ -33,6 +35,7 @@ type BuildingContextType = {
   getBuildingAtPosition: (row: number, col: number) => PlacedBuilding | undefined;
   canAffordBuilding: () => boolean;
   canAffordUpgrade: (currentTier: number) => boolean;
+  demolishBuilding: (buildingId: string) => Promise<boolean>;
   addTokens: (amount: number) => Promise<void>;
   refreshTokens: () => Promise<void>;
   resetCity: () => Promise<void>;
@@ -191,7 +194,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       if (!upgraded) return false;
 
       const newBuildings = buildingsRef.current.map(b =>
-        b.id === buildingId ? { ...b, tier: upgraded.tier } : b
+        b.id === buildingId ? { ...b, tier: upgraded.tier, variant: upgraded.variant } : b
       );
       updateBuildings(newBuildings);
       setTokens(prev => prev - cost);
@@ -199,6 +202,30 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error) {
       console.error('Failed to upgrade building:', error);
+      return false;
+    }
+  };
+
+  const demolishBuilding = async (buildingId: string): Promise<boolean> => {
+    const building = buildingsRef.current.find(b => b.id === buildingId);
+    if (!building) return false;
+
+    const refund = getDemolishRefund(building.tier);
+
+    if (useInMemory.current) {
+      updateBuildings(buildingsRef.current.filter(b => b.id !== buildingId));
+      setTokens(prev => prev + refund);
+      return true;
+    }
+
+    try {
+      await demolishBuildingDb(buildingId);
+      const newCount = await addTokensDb(refund);
+      updateBuildings(buildingsRef.current.filter(b => b.id !== buildingId));
+      setTokens(newCount);
+      return true;
+    } catch (error) {
+      console.error('Failed to demolish building:', error);
       return false;
     }
   };
@@ -226,6 +253,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
         placeBuilding,
         autoBuildBuilding,
         upgradeBuilding,
+        demolishBuilding,
         getBuildingAtPosition: getBuildingAtPositionFn,
         canAffordBuilding,
         canAffordUpgrade,
@@ -247,5 +275,5 @@ export function useBuildings() {
   return context;
 }
 
-export { BUILDING_COST, getUpgradeCost, MAX_TIER, PURCHASABLE_BUILDING_TYPES };
+export { BUILDING_COST, getDemolishRefund, getUpgradeCost, MAX_TIER, PURCHASABLE_BUILDING_TYPES };
 export type { BuildingType, PlacedBuilding };

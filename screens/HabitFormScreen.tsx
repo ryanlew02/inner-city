@@ -3,7 +3,6 @@ import {
   Modal,
   Platform,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -11,6 +10,8 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useHabits } from "../context/HabitsContext";
+import { useTheme } from "../context/ThemeContext";
+import { ThemeColors } from "../constants/Colors";
 import { parseScheduleJson, ScheduleData } from "../types/habit";
 import ColorPickerSimple from "../components/ColorPickerSimple";
 
@@ -64,6 +65,8 @@ export default function HabitFormScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ habitId?: string }>();
   const { habits, addHabit, updateHabit } = useHabits();
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
 
   const editingHabitId = params.habitId || null;
   const isEditing = !!editingHabitId;
@@ -194,7 +197,7 @@ export default function HabitFormScreen() {
           value={form.name}
           onChangeText={(text) => setForm({ ...form, name: text })}
           placeholder="e.g., Morning Exercise"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textTertiary}
         />
 
         <Text style={styles.label}>Description</Text>
@@ -203,7 +206,7 @@ export default function HabitFormScreen() {
           value={form.description}
           onChangeText={(text) => setForm({ ...form, description: text })}
           placeholder="Optional description"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textTertiary}
           multiline
           numberOfLines={2}
         />
@@ -277,7 +280,7 @@ export default function HabitFormScreen() {
               }}
               keyboardType="numeric"
               placeholder={form.habit_mode === "quit" ? "e.g., 2 (max hours)" : "e.g., 30"}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textTertiary}
             />
             {errors.targetValue && (
               <Text style={styles.errorText}>{errors.targetValue}</Text>
@@ -322,7 +325,7 @@ export default function HabitFormScreen() {
           value={form.icon}
           onChangeText={(text) => setForm({ ...form, icon: text })}
           placeholder="Or type custom emoji"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textTertiary}
         />
 
         <Text style={styles.label}>Schedule</Text>
@@ -458,7 +461,7 @@ export default function HabitFormScreen() {
                         }
                       }}
                       placeholder="#FF5500"
-                      placeholderTextColor="#9CA3AF"
+                      placeholderTextColor={colors.textTertiary}
                       maxLength={7}
                       autoCapitalize="characters"
                     />
@@ -680,453 +683,455 @@ export default function HabitFormScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F2F4F7",
-  },
-  scrollView: {
-    flex: 1,
-    padding: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 16,
-    color: "#111827",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  inputError: {
-    borderColor: "#EF4444",
-  },
-  errorText: {
-    color: "#EF4444",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  pickerRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  pickerOption: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  pickerOptionSmall: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  pickerOptionText: {
-    fontSize: 14,
-    color: "#374151",
-    fontWeight: "500",
-  },
-  pickerOptionTextSelected: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-  modeHint: {
-    fontSize: 12,
-    color: "#9CA3AF",
-    marginTop: 6,
-    fontStyle: "italic",
-  },
-  colorPreviewButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  colorPreviewSwatch: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: "#E5E7EB",
-  },
-  colorPreviewInfo: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  colorPreviewText: {
-    fontSize: 15,
-    color: "#374151",
-    fontWeight: "500",
-  },
-  colorPreviewHex: {
-    fontSize: 13,
-    color: "#9CA3AF",
-    marginTop: 2,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-  },
-  colorPreviewArrow: {
-    fontSize: 24,
-    color: "#9CA3AF",
-  },
-  iconRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 12,
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  iconText: {
-    fontSize: 22,
-  },
-  schedulePreviewButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  schedulePreviewIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  schedulePreviewIconText: {
-    fontSize: 22,
-  },
-  schedulePreviewInfo: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  schedulePreviewTitle: {
-    fontSize: 15,
-    color: "#111827",
-    fontWeight: "500",
-  },
-  schedulePreviewSubtitle: {
-    fontSize: 13,
-    color: "#9CA3AF",
-    marginTop: 2,
-  },
-  schedulePreviewArrow: {
-    fontSize: 24,
-    color: "#9CA3AF",
-  },
-  buttonRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 30,
-    marginBottom: 40,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  saveButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  saveButtonDisabled: {
-    backgroundColor: "#9CA3AF",
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    maxHeight: "85%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#111827",
-  },
-  modalClose: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  modalCloseText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 12,
-  },
-  colorModalPreview: {
-    height: 60,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  colorModalPreviewText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 16,
-    textShadowColor: "rgba(0,0,0,0.3)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  colorGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 16,
-  },
-  colorGridButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  colorGridButtonSelected: {
-    borderWidth: 3,
-    borderColor: "#111827",
-  },
-  customColorToggle: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 12,
-  },
-  customColorToggleText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
-  },
-  customColorToggleArrow: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  customColorSection: {
-    padding: 16,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  hexInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 12,
-    gap: 8,
-  },
-  hexLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  hexInput: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    color: "#111827",
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  // Schedule modal styles
-  scheduleOptionsList: {
-    gap: 8,
-  },
-  scheduleOptionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  scheduleOptionLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  scheduleOptionEmoji: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  scheduleOptionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  scheduleOptionDesc: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  scheduleOptionCheck: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  scheduleOptionCheckText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 14,
-  },
-  daysSelector: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingVertical: 12,
-    gap: 6,
-  },
-  daySelectorButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: "#E5E7EB",
-    alignItems: "center",
-  },
-  daySelectorText: {
-    fontSize: 12,
-    color: "#374151",
-    fontWeight: "600",
-  },
-  daySelectorTextSelected: {
-    color: "#fff",
-  },
-  timesPerWeekContainer: {
-    paddingHorizontal: 8,
-    paddingVertical: 12,
-  },
-  timesPerWeekLabel: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginBottom: 10,
-  },
-  timesPerWeekRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  timesPerWeekButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: "#E5E7EB",
-    alignItems: "center",
-  },
-  timesPerWeekButtonText: {
-    fontSize: 16,
-    color: "#374151",
-    fontWeight: "600",
-  },
-  timesPerWeekButtonTextSelected: {
-    color: "#fff",
-  },
-  monthDaysContainer: {
-    paddingHorizontal: 8,
-    paddingVertical: 12,
-  },
-  monthDaysLabel: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginBottom: 10,
-  },
-  monthDaysGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  monthDayButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#E5E7EB",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  monthDayText: {
-    fontSize: 14,
-    color: "#374151",
-    fontWeight: "500",
-  },
-  monthDayTextSelected: {
-    color: "#fff",
-  },
-  monthDaysHint: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 12,
-    fontStyle: "italic",
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return {
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollView: {
+      flex: 1,
+      padding: 20,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: colors.text,
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderRadius: 10,
+      padding: 14,
+      fontSize: 16,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    inputError: {
+      borderColor: colors.danger,
+    },
+    errorText: {
+      color: colors.danger,
+      fontSize: 12,
+      marginTop: 4,
+    },
+    textArea: {
+      minHeight: 80,
+      textAlignVertical: "top" as const,
+    },
+    pickerRow: {
+      flexDirection: "row" as const,
+      gap: 10,
+    },
+    pickerOption: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      backgroundColor: colors.card,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pickerOptionSmall: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      borderRadius: 10,
+      backgroundColor: colors.card,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pickerOptionText: {
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: "500" as const,
+    },
+    pickerOptionTextSelected: {
+      color: colors.textInverse,
+      fontWeight: "600" as const,
+    },
+    modeHint: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 6,
+      fontStyle: "italic" as const,
+    },
+    colorPreviewButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    colorPreviewSwatch: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      borderWidth: 2,
+      borderColor: colors.border,
+    },
+    colorPreviewInfo: {
+      flex: 1,
+      marginLeft: 14,
+    },
+    colorPreviewText: {
+      fontSize: 15,
+      color: colors.text,
+      fontWeight: "500" as const,
+    },
+    colorPreviewHex: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 2,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    },
+    colorPreviewArrow: {
+      fontSize: 24,
+      color: colors.textTertiary,
+    },
+    iconRow: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: 10,
+      marginBottom: 12,
+    },
+    iconButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 10,
+      backgroundColor: colors.card,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    iconText: {
+      fontSize: 22,
+    },
+    schedulePreviewButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    schedulePreviewIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    schedulePreviewIconText: {
+      fontSize: 22,
+    },
+    schedulePreviewInfo: {
+      flex: 1,
+      marginLeft: 14,
+    },
+    schedulePreviewTitle: {
+      fontSize: 15,
+      color: colors.text,
+      fontWeight: "500" as const,
+    },
+    schedulePreviewSubtitle: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    schedulePreviewArrow: {
+      fontSize: 24,
+      color: colors.textTertiary,
+    },
+    buttonRow: {
+      flexDirection: "row" as const,
+      gap: 12,
+      marginTop: 30,
+      marginBottom: 40,
+    },
+    cancelButton: {
+      flex: 1,
+      paddingVertical: 16,
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cancelButtonText: {
+      fontSize: 16,
+      fontWeight: "600" as const,
+      color: colors.text,
+    },
+    saveButton: {
+      flex: 1,
+      paddingVertical: 16,
+      borderRadius: 12,
+      alignItems: "center" as const,
+    },
+    saveButtonDisabled: {
+      backgroundColor: colors.textTertiary,
+    },
+    saveButtonText: {
+      fontSize: 16,
+      fontWeight: "600" as const,
+      color: colors.textInverse,
+    },
+    // Modal styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: "flex-end" as const,
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 20,
+      maxHeight: "85%" as const,
+    },
+    modalHeader: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "bold" as const,
+      color: colors.text,
+    },
+    modalClose: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 8,
+    },
+    modalCloseText: {
+      color: colors.textInverse,
+      fontWeight: "600" as const,
+      fontSize: 14,
+    },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: colors.text,
+      marginBottom: 12,
+    },
+    colorModalPreview: {
+      height: 60,
+      borderRadius: 12,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      marginBottom: 20,
+    },
+    colorModalPreviewText: {
+      color: colors.textInverse,
+      fontWeight: "600" as const,
+      fontSize: 16,
+      textShadowColor: "rgba(0,0,0,0.3)",
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
+    },
+    colorGrid: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: 10,
+      marginBottom: 16,
+    },
+    colorGridButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+    },
+    colorGridButtonSelected: {
+      borderWidth: 3,
+      borderColor: colors.text,
+    },
+    customColorToggle: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 10,
+      padding: 14,
+      marginBottom: 12,
+    },
+    customColorToggleText: {
+      fontSize: 14,
+      fontWeight: "500" as const,
+      color: colors.text,
+    },
+    customColorToggleArrow: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    customColorSection: {
+      padding: 16,
+      backgroundColor: colors.backgroundSecondary,
+      borderRadius: 12,
+      marginBottom: 20,
+    },
+    hexInputRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      marginTop: 12,
+      gap: 8,
+    },
+    hexLabel: {
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: colors.text,
+    },
+    hexInput: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderRadius: 8,
+      padding: 10,
+      fontSize: 14,
+      color: colors.text,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    // Schedule modal styles
+    scheduleOptionsList: {
+      gap: 8,
+    },
+    scheduleOptionItem: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      padding: 16,
+      backgroundColor: colors.backgroundSecondary,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: "transparent" as const,
+    },
+    scheduleOptionLeft: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      flex: 1,
+    },
+    scheduleOptionEmoji: {
+      fontSize: 24,
+      marginRight: 12,
+    },
+    scheduleOptionTitle: {
+      fontSize: 15,
+      fontWeight: "600" as const,
+      color: colors.text,
+    },
+    scheduleOptionDesc: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    scheduleOptionCheck: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    scheduleOptionCheckText: {
+      color: colors.textInverse,
+      fontWeight: "bold" as const,
+      fontSize: 14,
+    },
+    daysSelector: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      paddingHorizontal: 8,
+      paddingVertical: 12,
+      gap: 6,
+    },
+    daySelectorButton: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: colors.border,
+      alignItems: "center" as const,
+    },
+    daySelectorText: {
+      fontSize: 12,
+      color: colors.text,
+      fontWeight: "600" as const,
+    },
+    daySelectorTextSelected: {
+      color: colors.textInverse,
+    },
+    timesPerWeekContainer: {
+      paddingHorizontal: 8,
+      paddingVertical: 12,
+    },
+    timesPerWeekLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: 10,
+    },
+    timesPerWeekRow: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      gap: 8,
+    },
+    timesPerWeekButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 8,
+      backgroundColor: colors.border,
+      alignItems: "center" as const,
+    },
+    timesPerWeekButtonText: {
+      fontSize: 16,
+      color: colors.text,
+      fontWeight: "600" as const,
+    },
+    timesPerWeekButtonTextSelected: {
+      color: colors.textInverse,
+    },
+    monthDaysContainer: {
+      paddingHorizontal: 8,
+      paddingVertical: 12,
+    },
+    monthDaysLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: 10,
+    },
+    monthDaysGrid: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: 6,
+    },
+    monthDayButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.border,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    monthDayText: {
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: "500" as const,
+    },
+    monthDayTextSelected: {
+      color: colors.textInverse,
+    },
+    monthDaysHint: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 12,
+      fontStyle: "italic" as const,
+    },
+  };
+}

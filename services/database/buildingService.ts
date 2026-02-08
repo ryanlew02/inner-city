@@ -98,13 +98,11 @@ export const PURCHASABLE_BUILDING_TYPES: BuildingType[] = [
 ];
 
 export const BUILDING_COST = 3;
-export const UPGRADE_COST_TIER2 = 3;
-export const UPGRADE_COST_TIER3 = 5;
 
 // Max variants per building type based on new asset availability
 export const MAX_VARIANTS: Record<BuildingType, number> = {
   apartment: 12,   // Apartments_level_1 (12 sprites)
-  house: 8,        // Colored houses across Green, Orange, Red, Turquoise, Wood, Yellow
+  house: 6,        // 6 colors: green, orange, red, turquoise, wood, yellow
   office: 8,       // Offices_level_1 (8 sprites)
   factory: 2,      // factory_1, factory_2
   solarpanel: 2,   // solar_panels_1, solar_panels_2
@@ -169,6 +167,12 @@ export const MAX_TIER: Record<BuildingType, number> = {
   solarpanel: 1,
 };
 
+// House variants map 1:1 to colors (1=green, 2=orange, 3=red, 4=turquoise, 5=wood, 6=yellow)
+// On upgrade, keep the same color (variant stays the same)
+function getRandomVariantSameColor(currentVariant: number): number {
+  return currentVariant;
+}
+
 export async function upgradeBuilding(buildingId: string): Promise<PlacedBuilding | null> {
   const building = await getBuildingById(buildingId);
   if (!building || building.tier >= MAX_TIER[building.building_type]) {
@@ -176,21 +180,47 @@ export async function upgradeBuilding(buildingId: string): Promise<PlacedBuildin
   }
 
   const newTier = building.tier + 1;
+  const newVariant = building.building_type === 'house'
+    ? getRandomVariantSameColor(building.variant)
+    : building.variant;
+
   const db = await getDatabase();
   await db.execAsync(
-    `UPDATE placed_buildings SET tier = ${newTier} WHERE id = '${buildingId}'`
+    `UPDATE placed_buildings SET tier = ${newTier}, variant = ${newVariant} WHERE id = '${buildingId}'`
   );
 
   return {
     ...building,
     tier: newTier,
+    variant: newVariant,
   };
 }
 
 export function getUpgradeCost(currentTier: number): number {
-  if (currentTier === 1) return UPGRADE_COST_TIER2;
-  if (currentTier === 2) return UPGRADE_COST_TIER3;
+  if (currentTier === 1) return 3;
+  if (currentTier === 2) return 5;
+  if (currentTier === 3) return 8;
   return 0;
+}
+
+// Total tokens invested in a building at a given tier (build cost + all upgrades)
+export function getTotalInvestment(tier: number): number {
+  let total = BUILDING_COST; // initial build cost
+  for (let t = 1; t < tier; t++) {
+    total += getUpgradeCost(t);
+  }
+  return total;
+}
+
+// Refund for demolishing: 75% of total investment, integer division
+export function getDemolishRefund(tier: number): number {
+  return Math.floor(getTotalInvestment(tier) * 0.75);
+}
+
+export async function demolishBuilding(buildingId: string): Promise<boolean> {
+  const db = await getDatabase();
+  await db.execAsync(`DELETE FROM placed_buildings WHERE id = '${buildingId}'`);
+  return true;
 }
 
 export async function clearAllBuildings(): Promise<void> {
