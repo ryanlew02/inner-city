@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Image, ImageSourcePropType, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withDecay } from "react-native-reanimated";
 import BuildingSheet from "../components/BuildingSheet";
 import { BuildingType, PlacedBuilding, PURCHASABLE_BUILDING_TYPES, useBuildings } from "../context/BuildingContext";
 import { useHabits } from "../context/HabitsContext";
@@ -405,6 +405,7 @@ export default function CityScreen() {
     resetCity,
   } = useBuildings();
 
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [sheetVisible, setSheetVisible] = useState(false);
   const [sheetMode, setSheetMode] = useState<"build" | "upgrade" | "autobuild">("build");
   const [selectedPlotIndex, setSelectedPlotIndex] = useState<number | null>(null);
@@ -422,17 +423,29 @@ export default function CityScreen() {
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
+  const focalX = useSharedValue(0);
+  const focalY = useSharedValue(0);
 
   const pinchGesture = Gesture.Pinch()
-    .onStart(() => {
+    .onStart((event) => {
       savedScale.value = scale.value;
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+      focalX.value = event.focalX;
+      focalY.value = event.focalY;
     })
     .onUpdate((event) => {
-      const newScale = savedScale.value * event.scale;
-      scale.value = Math.min(Math.max(newScale, MIN_SCALE), MAX_SCALE);
+      const newScale = Math.min(Math.max(savedScale.value * event.scale, MIN_SCALE), MAX_SCALE);
+      // Zoom around the focal point so it stays under your fingers
+      const scaleRatio = newScale / savedScale.value;
+      translateX.value = focalX.value - (focalX.value - savedTranslateX.value) * scaleRatio;
+      translateY.value = focalY.value - (focalY.value - savedTranslateY.value) * scaleRatio;
+      scale.value = newScale;
     })
     .onEnd(() => {
       savedScale.value = scale.value;
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
     });
 
   const panGesture = Gesture.Pan()
@@ -443,14 +456,20 @@ export default function CityScreen() {
     .onUpdate((event) => {
       translateX.value = savedTranslateX.value + event.translationX;
       translateY.value = savedTranslateY.value + event.translationY;
+    })
+    .onEnd((event) => {
+      // Momentum scrolling — continues in the direction of the flick
+      translateX.value = withDecay({ velocity: event.velocityX, deceleration: 0.997 });
+      translateY.value = withDecay({ velocity: event.velocityY, deceleration: 0.997 });
     });
 
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
-      scale.value = withSpring(1);
-      translateX.value = withSpring(0);
-      translateY.value = withSpring(0);
+      const springConfig = { damping: 18, stiffness: 120 };
+      scale.value = withSpring(1, springConfig);
+      translateX.value = withSpring(0, springConfig);
+      translateY.value = withSpring(0, springConfig);
       savedScale.value = 1;
       savedTranslateX.value = 0;
       savedTranslateY.value = 0;
@@ -464,13 +483,16 @@ export default function CityScreen() {
   const gridContainerRef = useRef<View>(null);
 
   const handleTapPosition = (ex: number, ey: number) => {
-    // e.x/e.y from gesture handler are relative to the Animated.View's
-    // rendered bounds on screen. Since the view has a scale transform,
-    // e.x = scale * contentX, so divide by scale to get content coords.
-    // The translate is already accounted for (it shifts the view's frame).
+    // Tap coordinates are relative to the viewport.
+    // The grid is centered in the viewport, and transforms (translate then scale)
+    // are applied around the grid's center. Convert tap to grid content coords:
+    //   contentX = (tapX - viewportCenterX - translateX) / scale + gridWidth/2
+    //   contentY = (tapY - viewportCenterY - translateY) / scale + gridHeight/2
     const scaleVal = scale.value;
-    const localX = ex / scaleVal;
-    const localY = ey / scaleVal;
+    const tx = translateX.value;
+    const ty = translateY.value;
+    const localX = (ex - viewportSize.width / 2 - tx) / scaleVal + isoBounds.width / 2;
+    const localY = (ey - viewportSize.height / 2 - ty) / scaleVal + isoBounds.height / 2;
 
     const hit = isoToGrid(
       localX,
@@ -692,8 +714,14 @@ export default function CityScreen() {
         </View>
       </View>
 
-      <View style={styles.cityViewport}>
-        <GestureDetector gesture={composedGesture}>
+      <GestureDetector gesture={composedGesture}>
+        <View
+          style={styles.cityViewport}
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            setViewportSize({ width, height });
+          }}
+        >
           <Animated.View
             ref={gridContainerRef as React.RefObject<View>}
             style={[
@@ -707,8 +735,8 @@ export default function CityScreen() {
           >
             {renderGrid()}
           </Animated.View>
-        </GestureDetector>
-      </View>
+        </View>
+      </GestureDetector>
 
       <View style={styles.statsContainer}>
         <View style={styles.statsRow}>

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { AppState, AppStateStatus } from "react-native";
-import { Audio } from "expo-av";
+import { useAudioPlayer } from "expo-audio";
 import { Habit, HabitEntry, parseScheduleJson, isScheduledForToday, isScheduledForDate } from "../types/habit";
 import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb } from "../services/database/habitService";
 import { getEntriesForDate, upsertEntry, deleteEntryForHabit } from "../services/database/entryService";
@@ -33,7 +33,10 @@ const HabitsContext = createContext<HabitsContextType | null>(null);
 
 function getTodayDate(): string {
   const now = new Date();
-  return now.toISOString().split('T')[0];
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export function HabitsProvider({ children }: { children: ReactNode }) {
@@ -45,27 +48,17 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   const [onTokenEarned, setOnTokenEarned] = useState<(() => void) | undefined>(undefined);
   const useInMemory = useRef(false);
   const appState = useRef(AppState.currentState);
-  const completionSound = useRef<Audio.Sound | null>(null);
+  const completionPlayer = useAudioPlayer(require("../assets/sounds/complete.wav"));
 
   const isViewingToday = viewingDate === currentDate;
 
   const playCompletionSound = () => {
-    completionSound.current?.replayAsync().catch(() => {});
+    completionPlayer.seekTo(0);
+    completionPlayer.play();
   };
 
   useEffect(() => {
     loadData();
-
-    // Load completion sound
-    Audio.Sound.createAsync(require("../assets/sounds/complete.wav"))
-      .then(({ sound }) => {
-        completionSound.current = sound;
-      })
-      .catch((err) => console.warn("Failed to load completion sound:", err));
-
-    return () => {
-      completionSound.current?.unloadAsync();
-    };
   }, []);
 
   // Check for date change when app comes to foreground

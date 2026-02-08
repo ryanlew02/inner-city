@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Text,
   View,
@@ -7,7 +7,9 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Modal,
+  useWindowDimensions,
 } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { useHabits } from "../context/HabitsContext";
 import {
   Habit,
@@ -622,59 +624,88 @@ function MonthlyGrid({
   const daysInMonth = getDaysInMonth(year, month);
   const firstDayOfWeek = new Date(year, month, 1).getDay();
 
+  const { width: screenWidth } = useWindowDimensions();
+  // card: marginHorizontal 16 + padding 16 each side = 64, cell margin 2 each side = 4 per cell, 7 cells = 28
+  const cellSize = Math.floor((screenWidth - 64 - 28) / 7);
+
   const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
+  // Build rows of 7
+  const rows: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+  const lastRow = rows[rows.length - 1];
+  while (lastRow.length < 7) lastRow.push(null);
+
   const scheduleData = parseScheduleJson(habit.schedule_json);
 
   return (
     <View>
-      <View style={styles.dayLabelsRow}>
+      <View style={styles.monthCalRow}>
         {dayLabels.map((label, i) => (
-          <Text key={i} style={styles.dayLabel}>
+          <Text key={i} style={[styles.monthDayLabel, { width: cellSize, marginHorizontal: 2 }]}>
             {label}
           </Text>
         ))}
       </View>
-      <View style={styles.monthGrid}>
-        {cells.map((day, i) => {
-          if (day === null) {
-            return <View key={`empty-${i}`} style={styles.monthCell} />;
-          }
+      {rows.map((row, ri) => (
+        <View key={ri} style={styles.monthCalRow}>
+          {row.map((day, ci) => {
+            if (day === null) {
+              return (
+                <View
+                  key={`empty-${ri}-${ci}`}
+                  style={{ width: cellSize, height: cellSize, margin: 2, borderRadius: 6 }}
+                />
+              );
+            }
 
-          const cellDate = new Date(year, month, day);
-          const dateStr = formatDateStr(cellDate);
-          const isToday = dateStr === todayStr;
-          const isFuture = cellDate > today;
-          const scheduled = isScheduledForDate(scheduleData, cellDate);
-          const entry = entriesByDate.get(dateStr);
-          const completed = scheduled && isCompletedForDate(habit, entry);
+            const cellDate = new Date(year, month, day);
+            const dateStr = formatDateStr(cellDate);
+            const isToday = dateStr === todayStr;
+            const isFuture = cellDate > today;
+            const scheduled = isScheduledForDate(scheduleData, cellDate);
+            const entry = entriesByDate.get(dateStr);
+            const completed = scheduled && isCompletedForDate(habit, entry);
 
-          let bgColor = "#D1D5DB";
-          let opacity = 1;
-          if (isFuture) {
-            bgColor = "#D1D5DB";
-            opacity = 0.25;
-          } else if (completed) {
-            bgColor = habit.color;
-          } else if (!scheduled) {
-            bgColor = "#F3F4F6";
-          }
+            let bgColor = "#D1D5DB";
+            let opacity = 1;
+            if (isFuture) {
+              bgColor = "#D1D5DB";
+              opacity = 0.25;
+            } else if (completed) {
+              bgColor = habit.color;
+            } else if (!scheduled) {
+              bgColor = "#F3F4F6";
+            }
 
-          return (
-            <View
-              key={`day-${day}`}
-              style={[
-                styles.monthCell,
-                { backgroundColor: bgColor, opacity },
-                isToday && styles.todayCell,
-              ]}
-            />
-          );
-        })}
-      </View>
+            return (
+              <View
+                key={`day-${day}`}
+                style={[
+                  {
+                    width: cellSize,
+                    height: cellSize,
+                    margin: 2,
+                    borderRadius: 6,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: bgColor,
+                    opacity,
+                  },
+                  isToday && styles.todayCell,
+                ]}
+              >
+                <Text style={[styles.monthCalDayText, isToday && styles.monthCalTodayText]}>
+                  {day}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      ))}
     </View>
   );
 }
@@ -690,7 +721,6 @@ function YearlyGrid({
   todayStr: string;
   year: number;
 }) {
-  const scrollRef = useRef<ScrollView>(null);
   const today = new Date(todayStr + "T00:00:00");
   const startOfYear = new Date(year, 0, 1);
   const startDay = startOfYear.getDay();
@@ -715,69 +745,48 @@ function YearlyGrid({
     weeks.push(currentWeek);
   }
 
-  const currentWeekIndex = weeks.findIndex((week) =>
-    week.some((cell) => cell && formatDateStr(cell) === todayStr)
-  );
-
-  useEffect(() => {
-    if (scrollRef.current && currentWeekIndex > 0) {
-      const scrollX = Math.max(0, (currentWeekIndex - 3) * 14);
-      setTimeout(() => {
-        scrollRef.current?.scrollTo({ x: scrollX, animated: false });
-      }, 100);
-    }
-  }, [currentWeekIndex]);
-
   return (
     <View>
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-      >
-        <View>
-          {[0, 1, 2, 3, 4, 5, 6].map((row) => (
-            <View key={row} style={styles.yearRow}>
-              {weeks.map((week, wi) => {
-                const cell = week[row];
-                if (!cell) {
-                  return <View key={wi} style={styles.yearCell} />;
-                }
+      {[0, 1, 2, 3, 4, 5, 6].map((row) => (
+        <View key={row} style={styles.yearRow}>
+          {weeks.map((week, wi) => {
+            const cell = week[row];
+            if (!cell) {
+              return <View key={wi} style={styles.yearCell} />;
+            }
 
-                const dateStr = formatDateStr(cell);
-                const isToday = dateStr === todayStr;
-                const isFuture = cell > today;
-                const scheduled = isScheduledForDate(scheduleData, cell);
-                const entry = entriesByDate.get(dateStr);
-                const completed =
-                  scheduled && isCompletedForDate(habit, entry);
+            const dateStr = formatDateStr(cell);
+            const isToday = dateStr === todayStr;
+            const isFuture = cell > today;
+            const scheduled = isScheduledForDate(scheduleData, cell);
+            const entry = entriesByDate.get(dateStr);
+            const completed =
+              scheduled && isCompletedForDate(habit, entry);
 
-                let bgColor = "#D1D5DB";
-                let opacity = 1;
-                if (isFuture) {
-                  bgColor = "#D1D5DB";
-                  opacity = 0.25;
-                } else if (completed) {
-                  bgColor = habit.color;
-                } else if (!scheduled) {
-                  bgColor = "#F3F4F6";
-                }
+            let bgColor = "#D1D5DB";
+            let opacity = 1;
+            if (isFuture) {
+              bgColor = "#D1D5DB";
+              opacity = 0.25;
+            } else if (completed) {
+              bgColor = habit.color;
+            } else if (!scheduled) {
+              bgColor = "#F3F4F6";
+            }
 
-                return (
-                  <View
-                    key={wi}
-                    style={[
-                      styles.yearCell,
-                      { backgroundColor: bgColor, opacity },
-                      isToday && styles.todayYearCell,
-                    ]}
-                  />
-                );
-              })}
-            </View>
-          ))}
+            return (
+              <View
+                key={wi}
+                style={[
+                  styles.yearCell,
+                  { backgroundColor: bgColor, opacity },
+                  isToday && styles.todayYearCell,
+                ]}
+              />
+            );
+          })}
         </View>
-      </ScrollView>
+      ))}
     </View>
   );
 }
@@ -916,6 +925,14 @@ export default function StatsScreen() {
   const [monthlyLoading, setMonthlyLoading] = useState(false);
   const [yearlyLoading, setYearlyLoading] = useState(false);
 
+  // Reload data when screen gains focus (e.g. after completing habits)
+  const [focusCount, setFocusCount] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      setFocusCount((c) => c + 1);
+    }, [])
+  );
+
   // ─── Load overview (current year Jan 1 → today) ───
   useEffect(() => {
     if (activeHabits.length === 0) {
@@ -929,7 +946,7 @@ export default function StatsScreen() {
       setOverviewEntries(m);
       setOverviewLoading(false);
     });
-  }, [habitIdsKey, todayStr]);
+  }, [habitIdsKey, todayStr, focusCount]);
 
   // ─── Load weekly entries when week changes ───
   useEffect(() => {
@@ -946,7 +963,7 @@ export default function StatsScreen() {
       setWeeklyEntries(m);
       setWeeklyLoading(false);
     });
-  }, [weekStart, habitIdsKey]);
+  }, [weekStart, habitIdsKey, focusCount]);
 
   // ─── Load monthly entries when month changes ───
   useEffect(() => {
@@ -967,7 +984,7 @@ export default function StatsScreen() {
       setMonthlyEntries(m);
       setMonthlyLoading(false);
     });
-  }, [selectedMonth, selectedMonthYear, habitIdsKey, overviewEntries]);
+  }, [selectedMonth, selectedMonthYear, habitIdsKey, overviewEntries, focusCount]);
 
   // ─── Load yearly entries when year changes ───
   useEffect(() => {
@@ -987,7 +1004,7 @@ export default function StatsScreen() {
       setYearlyEntries(m);
       setYearlyLoading(false);
     });
-  }, [selectedYear, habitIdsKey, overviewEntries]);
+  }, [selectedYear, habitIdsKey, overviewEntries, focusCount]);
 
   // ─── Month navigation ───
   const goMonthPrev = useCallback(() => {
@@ -1323,10 +1340,6 @@ export default function StatsScreen() {
 
 // ─── Styles ───
 
-const MONTH_CELL_SIZE = 14;
-const MONTH_CELL_GAP = 3;
-const YEAR_CELL_SIZE = 10;
-const YEAR_CELL_GAP = 2;
 
 const styles = StyleSheet.create({
   container: {
@@ -1526,31 +1539,29 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Monthly grid
-  dayLabelsRow: {
+  // Monthly grid (calendar layout)
+  monthCalRow: {
     flexDirection: "row",
-    marginBottom: 4,
+    justifyContent: "center",
   },
-  dayLabel: {
-    width: MONTH_CELL_SIZE,
-    marginRight: MONTH_CELL_GAP,
-    fontSize: 9,
+  monthDayLabel: {
+    fontSize: 12,
+    fontWeight: "600",
     color: "#9CA3AF",
     textAlign: "center",
+    marginBottom: 4,
   },
-  monthGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  monthCalDayText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#374151",
   },
-  monthCell: {
-    width: MONTH_CELL_SIZE,
-    height: MONTH_CELL_SIZE,
-    borderRadius: 3,
-    marginRight: MONTH_CELL_GAP,
-    marginBottom: MONTH_CELL_GAP,
+  monthCalTodayText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   todayCell: {
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: "#111827",
   },
 
@@ -1559,11 +1570,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   yearCell: {
-    width: YEAR_CELL_SIZE,
-    height: YEAR_CELL_SIZE,
-    borderRadius: 2,
-    marginRight: YEAR_CELL_GAP,
-    marginBottom: YEAR_CELL_GAP,
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: 1,
+    marginRight: 1,
+    marginBottom: 1,
     backgroundColor: "#F3F4F6",
   },
   todayYearCell: {
