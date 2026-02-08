@@ -34,7 +34,10 @@ export function parseScheduleJson(json: string): ScheduleData {
 }
 
 export function isScheduledForToday(scheduleData: ScheduleData): boolean {
-  return isScheduledForDate(scheduleData, new Date());
+  // Use a date anchored to the user's local timezone midnight to avoid edge cases
+  const now = new Date();
+  const localDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return isScheduledForDate(scheduleData, localDate);
 }
 
 export function isScheduledForDate(scheduleData: ScheduleData, date: Date): boolean {

@@ -72,35 +72,13 @@ function getBuildingSpriteStyle(building: PlacedBuilding): { width: number; heig
   };
 }
 
-function getBuildingRenderTile(building: PlacedBuilding): number {
-  return building.plot_index;
-}
-
-// Local helper functions (duplicated from buildingService to avoid circular deps)
-function plotIndexToGridPositionLocal(plotIndex: number, gridRows: number, gridCols: number): { row: number; col: number } | null {
-  let count = 0;
-  for (let r = 0; r < gridRows; r++) {
-    for (let c = 0; c < gridCols; c++) {
-      if (getGridTileType(r, c, gridRows, gridCols) === "plot") {
-        if (count === plotIndex) return { row: r, col: c };
-        count++;
-      }
-    }
+// Build a lookup map of buildings by grid position for fast rendering
+function buildBuildingMap(buildings: PlacedBuilding[]): Map<string, PlacedBuilding> {
+  const map = new Map<string, PlacedBuilding>();
+  for (const b of buildings) {
+    map.set(`${b.grid_row},${b.grid_col}`, b);
   }
-  return null;
-}
-
-function gridPositionToPlotIndexLocal(row: number, col: number, gridRows: number, gridCols: number): number | null {
-  if (getGridTileType(row, col, gridRows, gridCols) !== "plot") return null;
-
-  let index = 0;
-  for (let r = 0; r < gridRows; r++) {
-    for (let c = 0; c < gridCols; c++) {
-      if (r === row && c === col) return index;
-      if (getGridTileType(r, c, gridRows, gridCols) === "plot") index++;
-    }
-  }
-  return null;
+  return map;
 }
 
 // Tile types
@@ -319,21 +297,6 @@ function getGridTileType(row: number, col: number, gridRows: number, gridCols: n
   return "plot";
 }
 
-function buildPlotIndex(row: number, col: number, gridRows: number, gridCols: number): number | null {
-  const tileType = getGridTileType(row, col, gridRows, gridCols);
-  if (tileType !== "plot") return null;
-
-  let index = 0;
-  for (let r = 0; r < row; r++) {
-    for (let c = 0; c < gridCols; c++) {
-      if (getGridTileType(r, c, gridRows, gridCols) === "plot") index++;
-    }
-  }
-  for (let c = 0; c < col; c++) {
-    if (getGridTileType(row, c, gridRows, gridCols) === "plot") index++;
-  }
-  return index;
-}
 
 function getTileRotation(_tileType: TileType): string {
   return "0deg";
@@ -400,7 +363,7 @@ export default function CityScreen() {
     placeBuilding,
     autoBuildBuilding,
     upgradeBuilding,
-    getBuildingAtPlot,
+    getBuildingAtPosition,
     refreshTokens,
     resetCity,
   } = useBuildings();
@@ -408,7 +371,7 @@ export default function CityScreen() {
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [sheetVisible, setSheetVisible] = useState(false);
   const [sheetMode, setSheetMode] = useState<"build" | "upgrade" | "autobuild">("build");
-  const [selectedPlotIndex, setSelectedPlotIndex] = useState<number | null>(null);
+  const [selectedPlot, setSelectedPlot] = useState<{ row: number; col: number } | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<PlacedBuilding | undefined>(undefined);
 
   // Register callback to refresh tokens when habit is completed
@@ -503,10 +466,7 @@ export default function CityScreen() {
       GRID_COLS
     );
     if (hit && getGridTileType(hit.row, hit.col, GRID_ROWS, GRID_COLS) === "plot") {
-      const plotIndex = buildPlotIndex(hit.row, hit.col, GRID_ROWS, GRID_COLS);
-      if (plotIndex !== null) {
-        handlePlotPress(plotIndex);
-      }
+      handlePlotPress(hit.row, hit.col);
     }
   };
 
@@ -532,16 +492,14 @@ export default function CityScreen() {
     ],
   }));
 
-  const handlePlotPress = (plotIndex: number) => {
-    const existingBuilding = getBuildingAtPlot(plotIndex, GRID_ROWS, GRID_COLS);
+  const handlePlotPress = (row: number, col: number) => {
+    const existingBuilding = getBuildingAtPosition(row, col);
     if (existingBuilding) {
-      // Open upgrade sheet
       setSelectedBuilding(existingBuilding);
       setSheetMode("upgrade");
       setSheetVisible(true);
     } else {
-      // Open build sheet
-      setSelectedPlotIndex(plotIndex);
+      setSelectedPlot({ row, col });
       setSheetMode("build");
       setSheetVisible(true);
     }
@@ -556,7 +514,7 @@ export default function CityScreen() {
     const randomType = PURCHASABLE_BUILDING_TYPES[
       Math.floor(Math.random() * PURCHASABLE_BUILDING_TYPES.length)
     ];
-    const success = await autoBuildBuilding(randomType, maxPlots, GRID_ROWS, GRID_COLS);
+    const success = await autoBuildBuilding(randomType, GRID_ROWS, GRID_COLS);
     if (success) {
       setSheetVisible(false);
     }
@@ -568,7 +526,7 @@ export default function CityScreen() {
       const randomType = PURCHASABLE_BUILDING_TYPES[
         Math.floor(Math.random() * PURCHASABLE_BUILDING_TYPES.length)
       ];
-      const success = await autoBuildBuilding(randomType, maxPlots, GRID_ROWS, GRID_COLS);
+      const success = await autoBuildBuilding(randomType, GRID_ROWS, GRID_COLS);
       if (!success) break;
     }
     setSheetVisible(false);
@@ -576,14 +534,14 @@ export default function CityScreen() {
 
   const handleSelectBuildingType = async (type: BuildingType) => {
     let success = false;
-    if (selectedPlotIndex !== null) {
-      success = await placeBuilding(selectedPlotIndex, type, GRID_ROWS, GRID_COLS);
+    if (selectedPlot) {
+      success = await placeBuilding(selectedPlot.row, selectedPlot.col, type, GRID_ROWS, GRID_COLS);
     } else {
-      success = await autoBuildBuilding(type, maxPlots, GRID_ROWS, GRID_COLS);
+      success = await autoBuildBuilding(type, GRID_ROWS, GRID_COLS);
     }
     if (success) {
       setSheetVisible(false);
-      setSelectedPlotIndex(null);
+      setSelectedPlot(null);
     }
   };
 
@@ -599,34 +557,27 @@ export default function CityScreen() {
 
   const handleSheetClose = () => {
     setSheetVisible(false);
-    setSelectedPlotIndex(null);
+    setSelectedPlot(null);
     setSelectedBuilding(undefined);
   };
+
+  const buildingMap = buildBuildingMap(buildings);
 
   const renderTile = (row: number, col: number) => {
     const tileType = getGridTileType(row, col, GRID_ROWS, GRID_COLS);
     if (!tileType) return null;
 
-    const plotIndex = buildPlotIndex(row, col, GRID_ROWS, GRID_COLS);
-    const building = plotIndex !== null ? getBuildingAtPlot(plotIndex, GRID_ROWS, GRID_COLS) : null;
+    const building = tileType === "plot" ? buildingMap.get(`${row},${col}`) ?? null : null;
     const rotation = getTileRotation(tileType);
     const isPlot = tileType === "plot";
 
     const isoPos = gridToIso(row, col);
     const screenX = isoPos.x + isoBounds.offsetX;
     const screenY = isoPos.y + isoBounds.offsetY;
-    // Z-index based on screen Y position - tiles lower on screen (higher Y) should be in front
-    // Multiply by 10 to give room for building height layers
     const zIndex = (row + col) * 10;
 
-    // Render plot tiles (grass with optional buildings)
-    // Use View + pointerEvents="none" so tap is handled by grid gesture with isometric hit-testing
     if (isPlot) {
-      // Check if this tile should render the building sprite
-      // For multi-tile buildings, we render from the bottom-right tile
-      const renderTileIndex = building ? getBuildingRenderTile(building) : null;
-      const shouldRenderBuilding = building && renderTileIndex === plotIndex;
-      const spriteStyle = shouldRenderBuilding ? getBuildingSpriteStyle(building) : null;
+      const spriteStyle = building ? getBuildingSpriteStyle(building) : null;
 
       const containerTop = screenY - PLOT_CONTAINER_EXTRA_TOP;
       const containerHeight = TILE_HEIGHT + PLOT_CONTAINER_EXTRA_TOP;
@@ -649,7 +600,7 @@ export default function CityScreen() {
           ]}
         >
           <Image source={grassTile} style={[styles.tile, { position: "absolute", left: 0, top: grassTop }]} />
-          {shouldRenderBuilding && spriteStyle && (
+          {building && spriteStyle && (
             <Image
               source={getBuildingSprite(building)}
               resizeMode="contain"

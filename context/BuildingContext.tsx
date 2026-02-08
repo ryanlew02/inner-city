@@ -1,19 +1,18 @@
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
+import { useAudioPlayer } from "expo-audio";
 import {
   BUILDING_COST,
   BuildingType,
-  canPlaceBuilding,
+  canPlaceAtPosition,
   clearAllBuildings as clearAllBuildingsDb,
-  findBuildingAtPlot,
-  findValidAnchorForBuilding,
-  getBuildingSize,
-  getNextAvailablePlotIndex,
+  findBuildingAtPosition,
+  findNextAvailablePosition,
   getPlacedBuildings,
   getUpgradeCost,
+  MAX_TIER,
   MAX_VARIANTS,
   placeBuilding as placeBuildingDb,
   PlacedBuilding,
-  plotIndexToGridPosition,
   PURCHASABLE_BUILDING_TYPES,
   upgradeBuilding as upgradeBuildingDb
 } from "../services/database/buildingService";
@@ -28,10 +27,10 @@ type BuildingContextType = {
   buildings: PlacedBuilding[];
   tokens: number;
   loading: boolean;
-  placeBuilding: (plotIndex: number, buildingType: BuildingType, gridRows: number, gridCols: number) => Promise<boolean>;
-  autoBuildBuilding: (buildingType: BuildingType, maxPlots: number, gridRows: number, gridCols: number) => Promise<boolean>;
+  placeBuilding: (row: number, col: number, buildingType: BuildingType, gridRows: number, gridCols: number) => Promise<boolean>;
+  autoBuildBuilding: (buildingType: BuildingType, gridRows: number, gridCols: number) => Promise<boolean>;
   upgradeBuilding: (buildingId: string) => Promise<boolean>;
-  getBuildingAtPlot: (plotIndex: number, gridRows: number, gridCols: number) => PlacedBuilding | undefined;
+  getBuildingAtPosition: (row: number, col: number) => PlacedBuilding | undefined;
   canAffordBuilding: () => boolean;
   canAffordUpgrade: (currentTier: number) => boolean;
   addTokens: (amount: number) => Promise<void>;
@@ -46,9 +45,14 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokens] = useState(0);
   const [loading, setLoading] = useState(true);
   const useInMemory = useRef(false);
-  const buildingsRef = useRef<PlacedBuilding[]>([]); // Always-current buildings for validation
+  const buildingsRef = useRef<PlacedBuilding[]>([]);
+  const buildPlayer = useAudioPlayer(require("../assets/sounds/build.wav"));
 
-  // Keep ref in sync with state
+  const playBuildSound = () => {
+    buildPlayer.seekTo(0);
+    buildPlayer.play();
+  };
+
   const updateBuildings = (newBuildings: PlacedBuilding[]) => {
     buildingsRef.current = newBuildings;
     setBuildings(newBuildings);
@@ -105,18 +109,14 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
     return cost > 0 && tokens >= cost;
   };
 
-  const getBuildingAtPlot = (plotIndex: number, gridRows: number, gridCols: number): PlacedBuilding | undefined => {
-    return findBuildingAtPlot(plotIndex, buildingsRef.current, gridRows, gridCols);
+  const getBuildingAtPositionFn = (row: number, col: number): PlacedBuilding | undefined => {
+    return findBuildingAtPosition(row, col, buildingsRef.current);
   };
 
-  const placeBuilding = async (plotIndex: number, buildingType: BuildingType, gridRows: number, gridCols: number): Promise<boolean> => {
+  const placeBuilding = async (row: number, col: number, buildingType: BuildingType, gridRows: number, gridCols: number): Promise<boolean> => {
     if (!canAffordBuilding()) return false;
 
-    const size = getBuildingSize(buildingType);
-
-    // Find valid anchor for this building using current ref (not stale state)
-    const anchorPlot = findValidAnchorForBuilding(plotIndex, buildingType, buildingsRef.current, gridRows, gridCols);
-    if (anchorPlot === null) {
+    if (!canPlaceAtPosition(row, col, buildingsRef.current, gridRows, gridCols)) {
       return false;
     }
 
@@ -128,16 +128,17 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
         setTokens(prev => prev - BUILDING_COST);
         const newBuilding: PlacedBuilding = {
           id: generateUUID(),
-          plot_index: anchorPlot,
+          grid_row: row,
+          grid_col: col,
           building_type: buildingType,
           tier: 1,
           variant,
-          size_x: size.x,
-          size_y: size.y,
+          size_x: 1,
+          size_y: 1,
           created_at: Date.now(),
         };
-        const newBuildings = [...buildingsRef.current, newBuilding].sort((a, b) => a.plot_index - b.plot_index);
-        updateBuildings(newBuildings);
+        updateBuildings([...buildingsRef.current, newBuilding]);
+        playBuildSound();
       }
       return success;
     }
@@ -146,10 +147,10 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       const spent = await spendTokensDb(BUILDING_COST);
       if (!spent) return false;
 
-      const newBuilding = await placeBuildingDb(anchorPlot, buildingType, variant);
-      const newBuildings = [...buildingsRef.current, newBuilding].sort((a, b) => a.plot_index - b.plot_index);
-      updateBuildings(newBuildings);
+      const newBuilding = await placeBuildingDb(row, col, buildingType, variant);
+      updateBuildings([...buildingsRef.current, newBuilding]);
       setTokens(prev => prev - BUILDING_COST);
+      playBuildSound();
       return true;
     } catch (error) {
       console.error('Failed to place building:', error);
@@ -157,38 +158,17 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const autoBuildBuilding = async (buildingType: BuildingType, maxPlots: number, gridRows: number, gridCols: number): Promise<boolean> => {
+  const autoBuildBuilding = async (buildingType: BuildingType, gridRows: number, gridCols: number): Promise<boolean> => {
     if (!canAffordBuilding()) return false;
 
-    const size = getBuildingSize(buildingType);
-
-    if (useInMemory.current) {
-      const validPlots: { plotIndex: number; row: number; col: number }[] = [];
-      for (let i = 0; i < maxPlots; i++) {
-        if (!canPlaceBuilding(i, size.x, size.y, buildingsRef.current, gridRows, gridCols)) continue;
-        const pos = plotIndexToGridPosition(i, gridRows, gridCols);
-        if (!pos) continue;
-        validPlots.push({ plotIndex: i, row: pos.row, col: pos.col });
-      }
-      if (validPlots.length === 0) return false;
-      // Prefer top of grid first (smallest row), then left (smallest col)
-      validPlots.sort((a, b) => a.row - b.row || a.col - b.col);
-      return placeBuilding(validPlots[0].plotIndex, buildingType, gridRows, gridCols);
-    }
-
-    try {
-      const nextPlot = await getNextAvailablePlotIndex(maxPlots, buildingType, gridRows, gridCols);
-      if (nextPlot === null) return false;
-      return placeBuilding(nextPlot, buildingType, gridRows, gridCols);
-    } catch (error) {
-      console.error('Failed to auto-build:', error);
-      return false;
-    }
+    const pos = findNextAvailablePosition(buildingsRef.current, gridRows, gridCols);
+    if (!pos) return false;
+    return placeBuilding(pos.row, pos.col, buildingType, gridRows, gridCols);
   };
 
   const upgradeBuilding = async (buildingId: string): Promise<boolean> => {
     const building = buildingsRef.current.find(b => b.id === buildingId);
-    if (!building || building.tier >= 3) return false;
+    if (!building || building.tier >= MAX_TIER[building.building_type]) return false;
 
     const cost = getUpgradeCost(building.tier);
     if (tokens < cost) return false;
@@ -199,6 +179,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
         b.id === buildingId ? { ...b, tier: b.tier + 1 } : b
       );
       updateBuildings(newBuildings);
+      playBuildSound();
       return true;
     }
 
@@ -214,6 +195,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       );
       updateBuildings(newBuildings);
       setTokens(prev => prev - cost);
+      playBuildSound();
       return true;
     } catch (error) {
       console.error('Failed to upgrade building:', error);
@@ -244,7 +226,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
         placeBuilding,
         autoBuildBuilding,
         upgradeBuilding,
-        getBuildingAtPlot,
+        getBuildingAtPosition: getBuildingAtPositionFn,
         canAffordBuilding,
         canAffordUpgrade,
         addTokens,
@@ -265,6 +247,5 @@ export function useBuildings() {
   return context;
 }
 
-export { BUILDING_COST, getUpgradeCost, PURCHASABLE_BUILDING_TYPES };
+export { BUILDING_COST, getUpgradeCost, MAX_TIER, PURCHASABLE_BUILDING_TYPES };
 export type { BuildingType, PlacedBuilding };
-

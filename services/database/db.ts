@@ -63,7 +63,7 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 
       CREATE TABLE IF NOT EXISTS placed_buildings (
         id TEXT PRIMARY KEY,
-        plot_index INTEGER UNIQUE NOT NULL,
+        plot_index INTEGER NOT NULL DEFAULT 0,
         building_type TEXT NOT NULL,
         tier INTEGER DEFAULT 1,
         variant INTEGER NOT NULL,
@@ -87,6 +87,22 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
     } catch (e) {
       // Column already exists, ignore
     }
+
+    // Migration: Add grid_row and grid_col columns for stable building positions
+    try {
+      await db.execAsync(`ALTER TABLE placed_buildings ADD COLUMN grid_row INTEGER`);
+    } catch (e) {
+      // Column already exists, ignore
+    }
+    try {
+      await db.execAsync(`ALTER TABLE placed_buildings ADD COLUMN grid_col INTEGER`);
+    } catch (e) {
+      // Column already exists, ignore
+    }
+
+    // Migrate existing buildings from plot_index to grid_row/grid_col
+    const { migrateToGridCoordinates } = require('./buildingService');
+    await migrateToGridCoordinates();
 
     isInitializing = false;
     return db;

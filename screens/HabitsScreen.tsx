@@ -681,6 +681,7 @@ export default function HabitsScreen() {
   const [swipeProgress, setSwipeProgress] = useState<{ habitId: string; translationX: number } | null>(null);
 
   const handleHabitPress = (habit: Habit) => {
+    if (!isScheduledForViewingDate(habit.id)) return;
     if (habit.target_type === "check") {
       toggleHabit(habit.id);
     } else {
@@ -786,6 +787,7 @@ export default function HabitsScreen() {
     const habit = habits.find((h) => h.id === habitId);
     if (!habit) return;
     setSwipeProgress(null);
+    if (!isScheduledForViewingDate(habitId)) return;
     if (habit.target_type === "check") {
       if (translationX >= MIN_SWIPE_CHECK_PX) toggleHabit(habitId);
       return;
@@ -875,7 +877,7 @@ export default function HabitsScreen() {
 
       {!isViewingToday && (
         <View style={styles.pastDateBanner}>
-          <Text style={styles.pastDateText}>Viewing {formatDateHeader(viewingDate)} (read-only)</Text>
+          <Text style={styles.pastDateText}>Viewing {formatDateHeader(viewingDate)}</Text>
         </View>
       )}
 
@@ -889,29 +891,11 @@ export default function HabitsScreen() {
           habits.map((habit) => {
             const completed = isHabitCompleted(habit.id);
             const isScheduledForDay = isScheduledForViewingDate(habit.id);
-            const isSwipingThis = swipeProgress?.habitId === habit.id && isViewingToday;
+            const isSwipingThis = swipeProgress?.habitId === habit.id;
             const tx = isSwipingThis ? swipeProgress.translationX : 0;
             const { increment: swipeIncrement, previewValue: swipePreviewValue } = isSwipingThis
               ? getSwipeProgress(habit, tx)
               : { increment: 0, previewValue: null };
-
-            // When viewing past dates, render without swipe gestures
-            if (!isViewingToday) {
-              return (
-                <View key={habit.id}>
-                  <HabitTile
-                    habit={habit}
-                    completed={completed}
-                    currentValue={getEntryValue(habit.id)}
-                    isScheduledToday={isScheduledForDay}
-                    onTap={() => {}}
-                    onLongPress={() => {}}
-                    swipeIncrement={0}
-                    swipePreviewValue={null}
-                  />
-                </View>
-              );
-            }
 
             return (
               <RightSwipeGestureWrapper

@@ -32,11 +32,16 @@ type HabitsContextType = {
 const HabitsContext = createContext<HabitsContextType | null>(null);
 
 function getTodayDate(): string {
+  // Use Intl.DateTimeFormat to get the date in the user's local timezone
+  // This is more reliable than new Date() getters across JS engines
   const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
+  return formatter.format(now); // Returns YYYY-MM-DD
 }
 
 export function HabitsProvider({ children }: { children: ReactNode }) {
@@ -68,7 +73,10 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         // App has come to foreground - check if date changed
         const today = getTodayDate();
         if (today !== currentDate) {
+          // Clear entries immediately to avoid showing yesterday's completed data
+          setEntries(new Map());
           setCurrentDate(today);
+          setViewingDateState(today);
           reloadEntriesForDate(today);
         }
       }
@@ -174,7 +182,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         const newEntry: HabitEntry = {
           id: generateUUID(),
           habit_id: id,
-          date: currentDate,
+          date: viewingDate,
           value: habit.target_type === 'check' ? 1 : habit.target_value,
           note: '',
           created_at: Date.now(),
@@ -194,7 +202,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
 
     try {
       if (wasCompleted) {
-        await deleteEntryForHabit(id, currentDate);
+        await deleteEntryForHabit(id, viewingDate);
         setEntries(prev => {
           const newMap = new Map(prev);
           newMap.delete(id);
@@ -203,7 +211,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       } else {
         const newEntry = await upsertEntry({
           habit_id: id,
-          date: currentDate,
+          date: viewingDate,
           value: habit.target_type === 'check' ? 1 : habit.target_value,
           note: '',
         });
@@ -239,7 +247,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        await deleteEntryForHabit(habitId, currentDate);
+        await deleteEntryForHabit(habitId, viewingDate);
         setEntries(prev => {
           const newMap = new Map(prev);
           newMap.delete(habitId);
@@ -257,7 +265,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         : {
             id: generateUUID(),
             habit_id: habitId,
-            date: currentDate,
+            date: viewingDate,
             value,
             note: '',
             created_at: Date.now(),
@@ -280,7 +288,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     try {
       const newEntry = await upsertEntry({
         habit_id: habitId,
-        date: currentDate,
+        date: viewingDate,
         value,
         note: '',
       });

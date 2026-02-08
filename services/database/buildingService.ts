@@ -9,7 +9,8 @@ export type BuildingType =
 
 export interface PlacedBuilding {
   id: string;
-  plot_index: number;
+  grid_row: number;
+  grid_col: number;
   building_type: BuildingType;
   tier: number;
   variant: number;
@@ -37,155 +38,53 @@ export interface GridPosition {
   col: number;
 }
 
-// Helper: Determine tile type at grid position (must match CityScreen getGridTileType)
-// Edges (row 0, row gridRows-1, col 0, col gridCols-1) are always road; interior uses 3-cell blocks.
-function getGridTileType(row: number, col: number, gridRows: number, gridCols: number): 'plot' | 'road' {
+// Helper: Determine tile type at grid position
+// Edges are always road; interior uses 3-cell blocks with roads at every 3rd row/col.
+export function getGridTileType(row: number, col: number, gridRows: number, gridCols: number): 'plot' | 'road' {
   const isEdge = row === 0 || row === gridRows - 1 || col === 0 || col === gridCols - 1;
   if (isEdge) return 'road';
-  const isHorizontalRoadRow = row % 3 === 0;
-  const isVerticalRoadCol = col % 3 === 0;
-  if (isHorizontalRoadRow || isVerticalRoadCol) return 'road';
+  if (row % 3 === 0 || col % 3 === 0) return 'road';
   return 'plot';
 }
 
-// Helper: Convert plot index to grid position
-export function plotIndexToGridPosition(
-  plotIndex: number,
-  gridRows: number,
-  gridCols: number
-): GridPosition | null {
-  let count = 0;
-  for (let r = 0; r < gridRows; r++) {
-    for (let c = 0; c < gridCols; c++) {
-      if (getGridTileType(r, c, gridRows, gridCols) === 'plot') {
-        if (count === plotIndex) return { row: r, col: c };
-        count++;
-      }
-    }
-  }
-  return null;
+// Check if a position is a valid plot tile
+function isPlotTile(row: number, col: number, gridRows: number, gridCols: number): boolean {
+  return getGridTileType(row, col, gridRows, gridCols) === 'plot';
 }
 
-// Helper: Convert grid position to plot index
-export function gridPositionToPlotIndex(
+// Find the building at a specific grid position
+export function findBuildingAtPosition(
   row: number,
   col: number,
-  gridRows: number,
-  gridCols: number
-): number | null {
-  if (getGridTileType(row, col, gridRows, gridCols) !== 'plot') return null;
-
-  let index = 0;
-  for (let r = 0; r < gridRows; r++) {
-    for (let c = 0; c < gridCols; c++) {
-      if (r === row && c === col) return index;
-      if (getGridTileType(r, c, gridRows, gridCols) === 'plot') index++;
-    }
-  }
-  return null;
+  buildings: PlacedBuilding[]
+): PlacedBuilding | undefined {
+  return buildings.find(b => b.grid_row === row && b.grid_col === col);
 }
 
-// Helper: Get all plots occupied by a building at anchorPlot with given size
-export function getOccupiedPlots(
-  anchorPlot: number,
-  sizeX: number,
-  sizeY: number,
-  gridRows: number,
-  gridCols: number
-): number[] {
-  const anchor = plotIndexToGridPosition(anchorPlot, gridRows, gridCols);
-  if (!anchor) return [];
-
-  const plots: number[] = [];
-  for (let dy = 0; dy < sizeY; dy++) {
-    for (let dx = 0; dx < sizeX; dx++) {
-      const targetRow = anchor.row + dy;
-      const targetCol = anchor.col + dx;
-
-      // Check bounds
-      if (targetRow >= gridRows || targetCol >= gridCols) continue;
-
-      const plot = gridPositionToPlotIndex(targetRow, targetCol, gridRows, gridCols);
-      if (plot !== null) plots.push(plot);
-    }
-  }
-  return plots;
-}
-
-// Helper: Check if a building can be placed at anchorPlot
-export function canPlaceBuilding(
-  anchorPlot: number,
-  sizeX: number,
-  sizeY: number,
+// Check if a building can be placed at a grid position
+export function canPlaceAtPosition(
+  row: number,
+  col: number,
   existingBuildings: PlacedBuilding[],
   gridRows: number,
   gridCols: number
 ): boolean {
-  const requiredPlots = getOccupiedPlots(anchorPlot, sizeX, sizeY, gridRows, gridCols);
-
-  // Check if we got all required plots (building fits in grid)
-  if (requiredPlots.length !== sizeX * sizeY) {
-    return false;
-  }
-
-  // Get all currently occupied plots
-  const occupiedPlots = new Set<number>();
-  for (const building of existingBuildings) {
-    const buildingSize = BUILDING_SIZES[building.building_type];
-    const plots = getOccupiedPlots(
-      building.plot_index,
-      buildingSize.x,
-      buildingSize.y,
-      gridRows,
-      gridCols
-    );
-    plots.forEach(p => occupiedPlots.add(p));
-  }
-
-  // Check if any required plot is occupied
-  for (const plot of requiredPlots) {
-    if (occupiedPlots.has(plot)) {
-      return false;
-    }
-  }
-
-  return true;
+  if (!isPlotTile(row, col, gridRows, gridCols)) return false;
+  return !findBuildingAtPosition(row, col, existingBuildings);
 }
 
-// Helper: Find the building that occupies a specific plot (checking all occupied tiles)
-export function findBuildingAtPlot(
-  plotIndex: number,
-  buildings: PlacedBuilding[],
-  gridRows: number,
-  gridCols: number
-): PlacedBuilding | undefined {
-  for (const building of buildings) {
-    const size = BUILDING_SIZES[building.building_type];
-    const occupiedPlots = getOccupiedPlots(
-      building.plot_index,
-      size.x,
-      size.y,
-      gridRows,
-      gridCols
-    );
-    if (occupiedPlots.includes(plotIndex)) {
-      return building;
-    }
-  }
-  return undefined;
-}
-
-// All buildings are 1x1: the clicked plot is the anchor if it can be placed there.
-export function findValidAnchorForBuilding(
-  clickedPlot: number,
-  buildingType: BuildingType,
+// Find next available position for auto-building (top-left first)
+export function findNextAvailablePosition(
   existingBuildings: PlacedBuilding[],
   gridRows: number,
   gridCols: number
-): number | null {
-  const size = BUILDING_SIZES[buildingType];
-  if (canPlaceBuilding(clickedPlot, size.x, size.y, existingBuildings, gridRows, gridCols)) {
-    return clickedPlot;
+): GridPosition | null {
+  for (let r = 0; r < gridRows; r++) {
+    for (let c = 0; c < gridCols; c++) {
+      if (canPlaceAtPosition(r, c, existingBuildings, gridRows, gridCols)) {
+        return { row: r, col: c };
+      }
+    }
   }
   return null;
 }
@@ -214,10 +113,8 @@ export const MAX_VARIANTS: Record<BuildingType, number> = {
 export async function getPlacedBuildings(): Promise<PlacedBuilding[]> {
   const db = await getDatabase();
   const result = await db.getAllAsync<PlacedBuilding>(
-    `SELECT * FROM placed_buildings ORDER BY plot_index ASC`
+    `SELECT * FROM placed_buildings ORDER BY created_at ASC`
   );
-  // Ensure size_x and size_y have values (for legacy buildings)
-  // Filter out buildings with old types that no longer exist
   return result
     .filter(building => building.building_type in BUILDING_SIZES)
     .map(building => ({
@@ -225,14 +122,6 @@ export async function getPlacedBuildings(): Promise<PlacedBuilding[]> {
       size_x: building.size_x ?? BUILDING_SIZES[building.building_type].x,
       size_y: building.size_y ?? BUILDING_SIZES[building.building_type].y,
     }));
-}
-
-export async function getBuildingAt(plotIndex: number): Promise<PlacedBuilding | null> {
-  const db = await getDatabase();
-  const result = await db.getFirstAsync<PlacedBuilding>(
-    `SELECT * FROM placed_buildings WHERE plot_index = ${plotIndex}`
-  );
-  return result || null;
 }
 
 export async function getBuildingById(id: string): Promise<PlacedBuilding | null> {
@@ -244,7 +133,8 @@ export async function getBuildingById(id: string): Promise<PlacedBuilding | null
 }
 
 export async function placeBuilding(
-  plotIndex: number,
+  row: number,
+  col: number,
   buildingType: BuildingType,
   variant: number
 ): Promise<PlacedBuilding> {
@@ -254,13 +144,14 @@ export async function placeBuilding(
   const size = BUILDING_SIZES[buildingType];
 
   await db.execAsync(`
-    INSERT INTO placed_buildings (id, plot_index, building_type, tier, variant, size_x, size_y, created_at)
-    VALUES ('${id}', ${plotIndex}, '${buildingType}', 1, ${variant}, ${size.x}, ${size.y}, ${created_at})
+    INSERT INTO placed_buildings (id, plot_index, grid_row, grid_col, building_type, tier, variant, size_x, size_y, created_at)
+    VALUES ('${id}', ${row * 1000 + col}, ${row}, ${col}, '${buildingType}', 1, ${variant}, ${size.x}, ${size.y}, ${created_at})
   `);
 
   return {
     id,
-    plot_index: plotIndex,
+    grid_row: row,
+    grid_col: col,
     building_type: buildingType,
     tier: 1,
     variant,
@@ -270,9 +161,17 @@ export async function placeBuilding(
   };
 }
 
+export const MAX_TIER: Record<BuildingType, number> = {
+  apartment: 1,
+  house: 4,
+  office: 2,
+  factory: 1,
+  solarpanel: 1,
+};
+
 export async function upgradeBuilding(buildingId: string): Promise<PlacedBuilding | null> {
   const building = await getBuildingById(buildingId);
-  if (!building || building.tier >= 3) {
+  if (!building || building.tier >= MAX_TIER[building.building_type]) {
     return null;
   }
 
@@ -288,33 +187,6 @@ export async function upgradeBuilding(buildingId: string): Promise<PlacedBuildin
   };
 }
 
-export async function getNextAvailablePlotIndex(
-  maxPlots: number,
-  buildingType: BuildingType,
-  gridRows: number,
-  gridCols: number
-): Promise<number | null> {
-  const buildings = await getPlacedBuildings();
-  const size = BUILDING_SIZES[buildingType];
-
-  // Prefer plots at the top of the grid first (smallest row), then left (smallest col)
-  const validPlots: { plotIndex: number; row: number; col: number }[] = [];
-
-  for (let i = 0; i < maxPlots; i++) {
-    const pos = plotIndexToGridPosition(i, gridRows, gridCols);
-    if (!pos || getGridTileType(pos.row, pos.col, gridRows, gridCols) !== 'plot') continue;
-    if (!canPlaceBuilding(i, size.x, size.y, buildings, gridRows, gridCols)) continue;
-    validPlots.push({ plotIndex: i, row: pos.row, col: pos.col });
-  }
-
-  if (validPlots.length === 0) return null;
-
-  // Sort by row (top first), then by col (left first)
-  validPlots.sort((a, b) => a.row - b.row || a.col - b.col);
-
-  return validPlots[0].plotIndex;
-}
-
 export function getUpgradeCost(currentTier: number): number {
   if (currentTier === 1) return UPGRADE_COST_TIER2;
   if (currentTier === 2) return UPGRADE_COST_TIER3;
@@ -324,4 +196,66 @@ export function getUpgradeCost(currentTier: number): number {
 export async function clearAllBuildings(): Promise<void> {
   const db = await getDatabase();
   await db.execAsync(`DELETE FROM placed_buildings`);
+}
+
+// --- Migration helpers ---
+
+// getCitySize logic (duplicated from CityScreen to avoid circular deps)
+function getCitySizeForMigration(buildingCount: number): { rows: number; cols: number } {
+  const thresholds = [
+    { threshold: 0, blocks: 1 },
+    { threshold: 3, blocks: 2 },
+    { threshold: 12, blocks: 3 },
+    { threshold: 30, blocks: 4 },
+    { threshold: 56, blocks: 5 },
+  ];
+  let blocksPerSide = 1;
+  for (const t of thresholds) {
+    if (buildingCount >= t.threshold) blocksPerSide = t.blocks;
+  }
+  const gridSize = 1 + blocksPerSide * 3;
+  return { rows: gridSize, cols: gridSize };
+}
+
+// Old plot_index to grid position (row-major scan, the old broken way)
+function oldPlotIndexToPosition(plotIndex: number, gridRows: number, gridCols: number): GridPosition | null {
+  let count = 0;
+  for (let r = 0; r < gridRows; r++) {
+    for (let c = 0; c < gridCols; c++) {
+      if (getGridTileType(r, c, gridRows, gridCols) === 'plot') {
+        if (count === plotIndex) return { row: r, col: c };
+        count++;
+      }
+    }
+  }
+  return null;
+}
+
+// Migrate existing buildings from plot_index to grid_row/grid_col
+export async function migrateToGridCoordinates(): Promise<void> {
+  const db = await getDatabase();
+
+  // Check if migration is needed (grid_row column has NULL values)
+  const needsMigration = await db.getFirstAsync<{ cnt: number }>(
+    `SELECT COUNT(*) as cnt FROM placed_buildings WHERE grid_row IS NULL`
+  );
+  if (!needsMigration || needsMigration.cnt === 0) return;
+
+  // Load all buildings sorted by creation time
+  const buildings = await db.getAllAsync<{ id: string; plot_index: number; created_at: number }>(
+    `SELECT id, plot_index, created_at FROM placed_buildings ORDER BY created_at ASC`
+  );
+
+  // For each building, compute grid position using the grid size at the time it was placed
+  for (let i = 0; i < buildings.length; i++) {
+    const building = buildings[i];
+    // When building i was placed, there were i existing buildings
+    const { rows, cols } = getCitySizeForMigration(i);
+    const pos = oldPlotIndexToPosition(building.plot_index, rows, cols);
+    if (pos) {
+      await db.execAsync(
+        `UPDATE placed_buildings SET grid_row = ${pos.row}, grid_col = ${pos.col}, plot_index = ${pos.row * 1000 + pos.col} WHERE id = '${building.id}'`
+      );
+    }
+  }
 }

@@ -20,6 +20,7 @@ import {
   PURCHASABLE_BUILDING_TYPES,
   BUILDING_COST,
   getUpgradeCost,
+  MAX_TIER,
 } from "../context/BuildingContext";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -86,7 +87,8 @@ export default function BuildingSheet({
   const canAffordBuilding = tokens >= BUILDING_COST;
   const upgradeCost = selectedBuilding ? getUpgradeCost(selectedBuilding.tier) : 0;
   const canAffordUpgrade = tokens >= upgradeCost && upgradeCost > 0;
-  const isMaxTier = selectedBuilding?.tier === 3;
+  const maxTier = selectedBuilding ? MAX_TIER[selectedBuilding.building_type] : 1;
+  const isMaxTier = selectedBuilding ? selectedBuilding.tier >= maxTier : false;
 
   const buildingsCanAfford = Math.floor(tokens / BUILDING_COST);
 
@@ -282,7 +284,7 @@ export default function BuildingSheet({
 
                   {isMaxTier ? (
                     <View style={styles.maxTierMessageCompact}>
-                      <Text style={styles.maxTierTextCompact}>Max Level Reached!</Text>
+                      <Text style={styles.maxTierTextCompact}>Currently at Max Level</Text>
                     </View>
                   ) : (
                     <TouchableOpacity
