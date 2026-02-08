@@ -105,9 +105,62 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
       // Column already exists, ignore
     }
 
+    // Remove any UNIQUE constraint on plot_index from older app versions.
+    // SQLite doesn't support DROP CONSTRAINT, so we recreate the table if needed.
+    try {
+      // Check if plot_index has a unique constraint (from table SQL or index)
+      const tableInfo = await db.getFirstAsync<{ sql: string }>(
+        `SELECT sql FROM sqlite_master WHERE type='table' AND name='placed_buildings'`
+      );
+      const hasUniqueInSchema = tableInfo?.sql?.toLowerCase().includes('plot_index') &&
+        tableInfo?.sql?.toLowerCase().includes('unique');
+
+      // Also drop any standalone unique indexes on plot_index
+      await db.execAsync(`DROP INDEX IF EXISTS idx_placed_buildings_plot_index`);
+      await db.execAsync(`DROP INDEX IF EXISTS unique_plot_index`);
+      await db.execAsync(`DROP INDEX IF EXISTS placed_buildings_plot_index`);
+
+      // Check for any remaining unique indexes on placed_buildings
+      const uniqueIndexes = await db.getAllAsync<{ name: string; sql: string }>(
+        `SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='placed_buildings' AND sql IS NOT NULL`
+      );
+      for (const idx of uniqueIndexes) {
+        if (idx.sql?.toLowerCase().includes('unique') && idx.sql?.toLowerCase().includes('plot_index')) {
+          await db.execAsync(`DROP INDEX IF EXISTS "${idx.name}"`);
+        }
+      }
+
+      if (hasUniqueInSchema) {
+        // Recreate table without the UNIQUE constraint
+        await db.execAsync(`
+          CREATE TABLE IF NOT EXISTS placed_buildings_new (
+            id TEXT PRIMARY KEY,
+            plot_index INTEGER NOT NULL DEFAULT 0,
+            building_type TEXT NOT NULL,
+            tier INTEGER DEFAULT 1,
+            variant INTEGER NOT NULL,
+            size_x INTEGER DEFAULT 1,
+            size_y INTEGER DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            grid_row INTEGER,
+            grid_col INTEGER
+          );
+          INSERT OR IGNORE INTO placed_buildings_new SELECT id, plot_index, building_type, tier, variant, size_x, size_y, created_at, grid_row, grid_col FROM placed_buildings;
+          DROP TABLE placed_buildings;
+          ALTER TABLE placed_buildings_new RENAME TO placed_buildings;
+        `);
+      }
+    } catch (e) {
+      console.warn('Legacy constraint cleanup (non-fatal):', e);
+    }
+
     // Migrate existing buildings from plot_index to grid_row/grid_col
-    const { migrateToGridCoordinates } = require('./buildingService');
-    await migrateToGridCoordinates();
+    try {
+      const { migrateToGridCoordinates } = require('./buildingService');
+      await migrateToGridCoordinates();
+    } catch (e) {
+      console.warn('Building migration failed (non-fatal):', e);
+    }
 
     isInitializing = false;
     return db;

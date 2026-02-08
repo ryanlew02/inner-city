@@ -104,6 +104,15 @@ export default function BuildingSheet({
     }
   };
 
+  const handleRandomBuild = () => {
+    if (canAffordBuilding) {
+      const randomType = PURCHASABLE_BUILDING_TYPES[
+        Math.floor(Math.random() * PURCHASABLE_BUILDING_TYPES.length)
+      ];
+      onSelectBuildingType(randomType);
+    }
+  };
+
   const handleUpgrade = () => {
     if (canAffordUpgrade) {
       onUpgrade();
@@ -251,7 +260,7 @@ export default function BuildingSheet({
                   Cost: {BUILDING_COST} tokens per building
                 </Text>
                 <View style={styles.buildingGrid}>
-                  {PURCHASABLE_BUILDING_TYPES.map((type) => (
+                  {PURCHASABLE_BUILDING_TYPES.slice(0, 3).map((type) => (
                     <TouchableOpacity
                       key={type}
                       style={[
@@ -262,14 +271,46 @@ export default function BuildingSheet({
                       disabled={!canAffordBuilding}
                     >
                       <Text style={styles.buildingIcon}>{BUILDING_ICONS[type]}</Text>
-                      <Text
-                        style={[
-                          styles.buildingLabel,
-                          !canAffordBuilding && styles.textDisabled,
-                        ]}
-                      >
-                        {BUILDING_LABELS[type]}
-                      </Text>
+                      <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>{BUILDING_LABELS[type]}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {PURCHASABLE_BUILDING_TYPES.slice(3, 4).map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.buildingOption,
+                        !canAffordBuilding && styles.buildingOptionDisabled,
+                      ]}
+                      onPress={() => handleBuildingSelect(type)}
+                      disabled={!canAffordBuilding}
+                    >
+                      <Text style={styles.buildingIcon}>{BUILDING_ICONS[type]}</Text>
+                      <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>{BUILDING_LABELS[type]}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity
+                    style={[
+                      styles.buildingOption,
+                      !canAffordBuilding && styles.buildingOptionDisabled,
+                    ]}
+                    onPress={handleRandomBuild}
+                    disabled={!canAffordBuilding}
+                  >
+                    <Text style={styles.buildingIcon}>{"\u{1F3B2}"}</Text>
+                    <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>Auto Build</Text>
+                  </TouchableOpacity>
+                  {PURCHASABLE_BUILDING_TYPES.slice(4).map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.buildingOption,
+                        !canAffordBuilding && styles.buildingOptionDisabled,
+                      ]}
+                      onPress={() => handleBuildingSelect(type)}
+                      disabled={!canAffordBuilding}
+                    >
+                      <Text style={styles.buildingIcon}>{BUILDING_ICONS[type]}</Text>
+                      <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>{BUILDING_LABELS[type]}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>

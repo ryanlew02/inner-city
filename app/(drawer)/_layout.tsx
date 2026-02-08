@@ -16,6 +16,7 @@ export default function DrawerLayout() {
           headerTintColor: colors.text,
           drawerActiveTintColor: colors.drawerActiveText,
           drawerInactiveTintColor: colors.drawerInactiveText,
+          swipeEnabled: false,
         }}
       >
         <Drawer.Screen

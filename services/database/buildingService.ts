@@ -283,9 +283,16 @@ export async function migrateToGridCoordinates(): Promise<void> {
     const { rows, cols } = getCitySizeForMigration(i);
     const pos = oldPlotIndexToPosition(building.plot_index, rows, cols);
     if (pos) {
-      await db.execAsync(
-        `UPDATE placed_buildings SET grid_row = ${pos.row}, grid_col = ${pos.col}, plot_index = ${pos.row * 1000 + pos.col} WHERE id = '${building.id}'`
-      );
+      try {
+        await db.execAsync(
+          `UPDATE placed_buildings SET grid_row = ${pos.row}, grid_col = ${pos.col}, plot_index = ${pos.row * 1000 + pos.col} WHERE id = '${building.id}'`
+        );
+      } catch (e) {
+        // If plot_index update fails (e.g. legacy unique constraint), just set grid coords
+        await db.execAsync(
+          `UPDATE placed_buildings SET grid_row = ${pos.row}, grid_col = ${pos.col} WHERE id = '${building.id}'`
+        );
+      }
     }
   }
 }

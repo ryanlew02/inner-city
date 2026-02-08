@@ -12,17 +12,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Gesture, GestureDetector, GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
+import { ThemeColors } from "../constants/Colors";
 import { useHabits } from "../context/HabitsContext";
 import { useTheme } from "../context/ThemeContext";
-import { ThemeColors } from "../constants/Colors";
 import { Habit, parseScheduleJson } from "../types/habit";
 
-const MIN_SWIPE_CHECK_PX = 60;
-const FULL_SWIPE_PX = 240;
-const FLICK_VELOCITY_THRESHOLD = 450;
-const FLICK_MIN_RATIO = 0.25;
+const MIN_SWIPE_CHECK_PX = 40;
+const FULL_SWIPE_PX = 200;
+const FLICK_VELOCITY_THRESHOLD = 300;
+const FLICK_MIN_RATIO = 0.15;
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -333,7 +333,8 @@ function RightSwipeGestureWrapper({ habit, onSwipeMoveRef, onSwipeEndRef, childr
     const reportMove = (tx: number) => onSwipeMoveRef.current(habitIdRef.current, tx);
     const reportEnd = (tx: number, vx: number) => onSwipeEndRef.current(habitIdRef.current, tx, vx);
     return Gesture.Pan()
-      .activeOffsetX([15, Infinity])
+      .activeOffsetX([10, Infinity])
+      .failOffsetY([-20, 20])
       .onUpdate((e) => {
         "worklet";
         runOnJS(reportMove)(e.translationX);
@@ -523,12 +524,12 @@ export default function HabitsScreen() {
   const [optionsModalVisible, setOptionsModalVisible] = useState(false);
   const [optionsHabit, setOptionsHabit] = useState<Habit | null>(null);
 
+  // Info tooltip state
+  const [infoVisible, setInfoVisible] = useState(false);
+
   // Calendar modal state
   const [calendarVisible, setCalendarVisible] = useState(false);
 
-  // Swipeable refs (right side = Reset only)
-  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
-  const currentlyOpenSwipeable = useRef<string | null>(null);
 
   // Right-swipe progress: distance → increment, shown live and applied on release
   const [swipeProgress, setSwipeProgress] = useState<{ habitId: string; translationX: number } | null>(null);
@@ -595,28 +596,10 @@ export default function HabitsScreen() {
     router.push(`/habit-form?habitId=${optionsHabit.id}`);
   };
 
-  const handleResetHabit = async (habit: Habit) => {
-    await updateEntryValue(habit.id, 0);
-    swipeableRefs.current[habit.id]?.close();
-    currentlyOpenSwipeable.current = null;
-  };
-
-  const handleSwipeableOpen = (habitId: string) => {
-    if (currentlyOpenSwipeable.current && currentlyOpenSwipeable.current !== habitId) {
-      swipeableRefs.current[currentlyOpenSwipeable.current]?.close();
-    }
-    currentlyOpenSwipeable.current = habitId;
-  };
-
-  const renderRightActions = (habit: Habit) => {
-    return (
-      <TouchableOpacity
-        style={styles.resetAction}
-        onPress={() => handleResetHabit(habit)}
-      >
-        <Text style={styles.resetActionText}>Reset</Text>
-      </TouchableOpacity>
-    );
+  const handleResetHabit = async () => {
+    if (!optionsHabit) return;
+    await updateEntryValue(optionsHabit.id, 0);
+    handleCloseOptions();
   };
 
   const getSwipeProgress = (habit: Habit, translationX: number) => {
@@ -735,7 +718,7 @@ export default function HabitsScreen() {
         </View>
       )}
 
-      <ScrollView style={styles.habitsList} contentContainerStyle={styles.habitsContent}>
+      <ScrollView style={styles.habitsList} contentContainerStyle={styles.habitsContent} scrollEventThrottle={16} bounces={false} overScrollMode="never">
         {habits.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No habits yet</Text>
@@ -758,24 +741,17 @@ export default function HabitsScreen() {
                 onSwipeMoveRef={setSwipeProgressRef}
                 onSwipeEndRef={applySwipeProgressRef}
               >
-                <Swipeable
-                  ref={(ref) => { swipeableRefs.current[habit.id] = ref; }}
-                  renderRightActions={() => renderRightActions(habit)}
-                  onSwipeableWillOpen={() => handleSwipeableOpen(habit.id)}
-                  friction={2}
-                >
-                  <HabitTile
-                    habit={habit}
-                    completed={completed}
-                    currentValue={getEntryValue(habit.id)}
-                    isScheduledToday={isScheduledForDay}
-                    onTap={() => handleHabitPress(habit)}
-                    onLongPress={() => handleOpenOptions(habit)}
-                    swipeIncrement={swipeIncrement}
-                    swipePreviewValue={isSwipingThis ? swipePreviewValue : null}
-                    colors={colors}
-                  />
-                </Swipeable>
+                <HabitTile
+                  habit={habit}
+                  completed={completed}
+                  currentValue={getEntryValue(habit.id)}
+                  isScheduledToday={isScheduledForDay}
+                  onTap={() => handleHabitPress(habit)}
+                  onLongPress={() => handleOpenOptions(habit)}
+                  swipeIncrement={swipeIncrement}
+                  swipePreviewValue={isSwipingThis ? swipePreviewValue : null}
+                  colors={colors}
+                />
               </RightSwipeGestureWrapper>
             );
           })
@@ -789,12 +765,56 @@ export default function HabitsScreen() {
       )}
 
       <TouchableOpacity
+        style={styles.infoButton}
+        onPress={() => setInfoVisible(true)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.infoButtonText}>i</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
         style={styles.fab}
         onPress={() => router.push('/habit-form')}
         activeOpacity={0.8}
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
+
+      {/* Info Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={infoVisible}
+        onRequestClose={() => setInfoVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.infoModalOverlay}
+          activeOpacity={1}
+          onPress={() => setInfoVisible(false)}
+        >
+          <View style={styles.infoModalContent}>
+            <Text style={styles.infoModalTitle}>Tips</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>→</Text>
+              <Text style={styles.infoText}>Swipe right on a habit to complete it</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>↔</Text>
+              <Text style={styles.infoText}>For progress habits, swipe further for more. Flick to fill completely</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>⋯</Text>
+              <Text style={styles.infoText}>Long press a habit for options (reset, edit, delete)</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.infoCloseButton}
+              onPress={() => setInfoVisible(false)}
+            >
+              <Text style={styles.infoCloseText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Options Modal */}
       <Modal
@@ -814,6 +834,13 @@ export default function HabitsScreen() {
                 {optionsHabit?.icon} {optionsHabit?.name}
               </Text>
             </View>
+
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={handleResetHabit}
+            >
+              <Text style={styles.optionItemText}>Reset Progress For Today</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.optionItem}
@@ -1226,25 +1253,6 @@ function createStyles(colors: ThemeColors) {
       right: 0,
       borderRadius: 14,
     },
-    resetAction: {
-      backgroundColor: colors.warning,
-      justifyContent: "center" as const,
-      alignItems: "center" as const,
-      width: 72,
-      borderRadius: 14,
-      marginBottom: 12,
-      marginLeft: 6,
-      elevation: 1,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.06,
-      shadowRadius: 2,
-    },
-    resetActionText: {
-      color: colors.textInverse,
-      fontWeight: "600" as const,
-      fontSize: 13,
-    },
     swipeFeedback: {
       position: "absolute" as const,
       right: 18,
@@ -1318,6 +1326,74 @@ function createStyles(colors: ThemeColors) {
     completedText: {
       color: colors.textInverse,
       fontSize: 16,
+      fontWeight: "600" as const,
+    },
+    infoButton: {
+      position: "absolute" as const,
+      left: 20,
+      bottom: 28,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+    },
+    infoButtonText: {
+      fontSize: 16,
+      fontWeight: "600" as const,
+      color: colors.textSecondary,
+      fontStyle: "italic" as const,
+    },
+    infoModalOverlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: "center" as const,
+    },
+    infoModalContent: {
+      backgroundColor: colors.background,
+      marginHorizontal: 30,
+      borderRadius: 16,
+      padding: 24,
+    },
+    infoModalTitle: {
+      fontSize: 18,
+      fontWeight: "700" as const,
+      color: colors.text,
+      marginBottom: 16,
+    },
+    infoRow: {
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
+      marginBottom: 14,
+      gap: 12,
+    },
+    infoIcon: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      width: 20,
+      textAlign: "center" as const,
+      marginTop: 1,
+    },
+    infoText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      flex: 1,
+      lineHeight: 20,
+    },
+    infoCloseButton: {
+      marginTop: 8,
+      alignSelf: "center" as const,
+      paddingVertical: 10,
+      paddingHorizontal: 32,
+      backgroundColor: colors.success,
+      borderRadius: 10,
+    },
+    infoCloseText: {
+      color: colors.textInverse,
+      fontSize: 15,
       fontWeight: "600" as const,
     },
     fab: {

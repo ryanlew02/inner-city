@@ -4,13 +4,14 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
-  StyleSheet,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
+import { ThemeColors } from "../constants/Colors";
 import { useHabits } from "../context/HabitsContext";
+import { useTheme } from "../context/ThemeContext";
 import { getEntriesForHabitInRange } from "../services/database/entryService";
 import {
   Habit,
@@ -205,13 +206,8 @@ function formatWeekLabel(monday: Date): string {
 
 // ─── Sub-components ───
 
-function TabBar({
-  activeTab,
-  onTabChange,
-}: {
-  activeTab: TabKey;
-  onTabChange: (tab: TabKey) => void;
-}) {
+function TabBar({ activeTab, onTabChange, colors }: { activeTab: TabKey; onTabChange: (tab: TabKey) => void; colors: ThemeColors }) {
+  const styles = createStyles(colors);
   const tabs: { key: TabKey; label: string }[] = [
     { key: "overview", label: "Overview" },
     { key: "weekly", label: "Weekly" },
@@ -221,145 +217,59 @@ function TabBar({
   return (
     <View style={styles.tabBar}>
       {tabs.map((t) => (
-        <TouchableOpacity
-          key={t.key}
-          style={[styles.tab, activeTab === t.key && styles.tabActive]}
-          onPress={() => onTabChange(t.key)}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === t.key && styles.tabTextActive,
-            ]}
-          >
-            {t.label}
-          </Text>
+        <TouchableOpacity key={t.key} style={[styles.tab, activeTab === t.key && styles.tabActive]} onPress={() => onTabChange(t.key)}>
+          <Text style={[styles.tabText, activeTab === t.key && styles.tabTextActive]}>{t.label}</Text>
         </TouchableOpacity>
       ))}
     </View>
   );
 }
 
-function NavRow({
-  label,
-  onPrev,
-  onNext,
-  nextDisabled,
-  onLabelPress,
-}: {
-  label: string;
-  onPrev: () => void;
-  onNext: () => void;
-  nextDisabled: boolean;
-  onLabelPress?: () => void;
-}) {
+function NavRow({ label, onPrev, onNext, nextDisabled, onLabelPress, colors }: { label: string; onPrev: () => void; onNext: () => void; nextDisabled: boolean; onLabelPress?: () => void; colors: ThemeColors }) {
+  const styles = createStyles(colors);
   return (
     <View style={styles.navRow}>
-      <TouchableOpacity onPress={onPrev} style={styles.navArrow}>
-        <Text style={styles.navArrowText}>{"\u25C0"}</Text>
-      </TouchableOpacity>
+      <TouchableOpacity onPress={onPrev} style={styles.navArrow}><Text style={styles.navArrowText}>{"\u25C0"}</Text></TouchableOpacity>
       <TouchableOpacity onPress={onLabelPress} disabled={!onLabelPress}>
         <Text style={styles.navLabel}>{label}</Text>
-        {onLabelPress && (
-          <Text style={styles.navLabelHint}>Tap to pick</Text>
-        )}
+        {onLabelPress && <Text style={styles.navLabelHint}>Tap to pick</Text>}
       </TouchableOpacity>
-      <TouchableOpacity
-        onPress={onNext}
-        disabled={nextDisabled}
-        style={styles.navArrow}
-      >
-        <Text
-          style={[
-            styles.navArrowText,
-            nextDisabled && styles.navArrowDisabled,
-          ]}
-        >
-          {"\u25B6"}
-        </Text>
+      <TouchableOpacity onPress={onNext} disabled={nextDisabled} style={styles.navArrow}>
+        <Text style={[styles.navArrowText, nextDisabled && styles.navArrowDisabled]}>{"\u25B6"}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-// ─── Month Picker Modal ───
-
-function MonthPickerModal({
-  visible,
-  onClose,
-  selectedMonth,
-  selectedYear,
-  currentMonth,
-  currentYear,
-  onSelect,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  selectedMonth: number;
-  selectedYear: number;
-  currentMonth: number;
-  currentYear: number;
-  onSelect: (month: number, year: number) => void;
-}) {
+function MonthPickerModal({ visible, onClose, selectedMonth, selectedYear, currentMonth, currentYear, onSelect, colors }: { visible: boolean; onClose: () => void; selectedMonth: number; selectedYear: number; currentMonth: number; currentYear: number; onSelect: (month: number, year: number) => void; colors: ThemeColors }) {
+  const ps = createPickerStyles(colors);
   const [viewYear, setViewYear] = useState(selectedYear);
-
-  useEffect(() => {
-    if (visible) setViewYear(selectedYear);
-  }, [visible, selectedYear]);
-
-  const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  useEffect(() => { if (visible) setViewYear(selectedYear); }, [visible, selectedYear]);
+  const MS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const monthRows: number[][] = [];
   for (let i = 0; i < 12; i += 3) monthRows.push([i, i + 1, i + 2]);
-
   const canGoNext = viewYear < currentYear;
   const isDisabled = (m: number) => viewYear === currentYear && m > currentMonth;
   const isCurrent = (m: number) => viewYear === currentYear && m === currentMonth;
   const isSelected = (m: number) => viewYear === selectedYear && m === selectedMonth;
-
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
-      <TouchableOpacity style={pickerStyles.overlay} activeOpacity={1} onPress={onClose}>
+      <TouchableOpacity style={ps.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-          <View style={pickerStyles.container}>
-            <View style={pickerStyles.nav}>
-              <TouchableOpacity onPress={() => setViewYear((y) => y - 1)} style={pickerStyles.navButton}>
-                <Text style={pickerStyles.navArrow}>{"\u2039"}</Text>
-              </TouchableOpacity>
-              <Text style={pickerStyles.navTitle}>{viewYear}</Text>
-              <TouchableOpacity
-                onPress={() => setViewYear((y) => y + 1)}
-                style={[pickerStyles.navButton, !canGoNext && pickerStyles.navButtonDisabled]}
-                disabled={!canGoNext}
-              >
-                <Text style={[pickerStyles.navArrow, !canGoNext && pickerStyles.navArrowDisabled]}>{"\u203A"}</Text>
-              </TouchableOpacity>
+          <View style={ps.container}>
+            <View style={ps.nav}>
+              <TouchableOpacity onPress={() => setViewYear((y) => y - 1)} style={ps.navButton}><Text style={ps.navArrow}>{"\u2039"}</Text></TouchableOpacity>
+              <Text style={ps.navTitle}>{viewYear}</Text>
+              <TouchableOpacity onPress={() => setViewYear((y) => y + 1)} style={[ps.navButton, !canGoNext && ps.navButtonDisabled]} disabled={!canGoNext}><Text style={[ps.navArrow, !canGoNext && ps.navArrowDisabled]}>{"\u203A"}</Text></TouchableOpacity>
             </View>
-            <View style={pickerStyles.grid}>
+            <View style={ps.grid}>
               {monthRows.map((row, ri) => (
-                <View key={ri} style={pickerStyles.gridRow}>
+                <View key={ri} style={ps.gridRow}>
                   {row.map((m) => {
                     const disabled = isDisabled(m);
                     return (
-                      <TouchableOpacity
-                        key={m}
-                        style={[
-                          pickerStyles.cell,
-                          isCurrent(m) && pickerStyles.currentCell,
-                          isSelected(m) && !isCurrent(m) && pickerStyles.selectedCell,
-                        ]}
-                        onPress={() => { if (!disabled) { onSelect(m, viewYear); onClose(); } }}
-                        disabled={disabled}
-                      >
-                        <Text
-                          style={[
-                            pickerStyles.cellText,
-                            isCurrent(m) && pickerStyles.currentCellText,
-                            isSelected(m) && !isCurrent(m) && pickerStyles.selectedCellText,
-                            disabled && pickerStyles.disabledCellText,
-                          ]}
-                        >
-                          {MONTH_SHORT[m]}
-                        </Text>
+                      <TouchableOpacity key={m} style={[ps.cell, isCurrent(m) && ps.currentCell, isSelected(m) && !isCurrent(m) && ps.selectedCell]} onPress={() => { if (!disabled) { onSelect(m, viewYear); onClose(); } }} disabled={disabled}>
+                        <Text style={[ps.cellText, isCurrent(m) && ps.currentCellText, isSelected(m) && !isCurrent(m) && ps.selectedCellText, disabled && ps.disabledCellText]}>{MS[m]}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -373,85 +283,35 @@ function MonthPickerModal({
   );
 }
 
-// ─── Year Picker Modal ───
-
-function YearPickerModal({
-  visible,
-  onClose,
-  selectedYear,
-  currentYear,
-  onSelect,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  selectedYear: number;
-  currentYear: number;
-  onSelect: (year: number) => void;
-}) {
+function YearPickerModal({ visible, onClose, selectedYear, currentYear, onSelect, colors }: { visible: boolean; onClose: () => void; selectedYear: number; currentYear: number; onSelect: (year: number) => void; colors: ThemeColors }) {
+  const ps = createPickerStyles(colors);
   const [pageStart, setPageStart] = useState(() => selectedYear - ((selectedYear - currentYear) % 12 + 12) % 12);
-
-  useEffect(() => {
-    if (visible) {
-      // Centre the selected year in the grid
-      const offset = ((selectedYear - currentYear) % 12 + 12) % 12;
-      setPageStart(selectedYear - offset);
-    }
-  }, [visible, selectedYear]);
-
+  useEffect(() => { if (visible) { const offset = ((selectedYear - currentYear) % 12 + 12) % 12; setPageStart(selectedYear - offset); } }, [visible, selectedYear]);
   const years: number[] = [];
   for (let i = 0; i < 12; i++) years.push(pageStart + i);
-
   const yearRows: number[][] = [];
   for (let i = 0; i < 12; i += 3) yearRows.push(years.slice(i, i + 3));
-
   const canGoNext = pageStart + 12 <= currentYear;
-
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
-      <TouchableOpacity style={pickerStyles.overlay} activeOpacity={1} onPress={onClose}>
+      <TouchableOpacity style={ps.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-          <View style={pickerStyles.container}>
-            <View style={pickerStyles.nav}>
-              <TouchableOpacity onPress={() => setPageStart((s) => s - 12)} style={pickerStyles.navButton}>
-                <Text style={pickerStyles.navArrow}>{"\u2039"}</Text>
-              </TouchableOpacity>
-              <Text style={pickerStyles.navTitle}>{pageStart} – {pageStart + 11}</Text>
-              <TouchableOpacity
-                onPress={() => setPageStart((s) => s + 12)}
-                style={[pickerStyles.navButton, !canGoNext && pickerStyles.navButtonDisabled]}
-                disabled={!canGoNext}
-              >
-                <Text style={[pickerStyles.navArrow, !canGoNext && pickerStyles.navArrowDisabled]}>{"\u203A"}</Text>
-              </TouchableOpacity>
+          <View style={ps.container}>
+            <View style={ps.nav}>
+              <TouchableOpacity onPress={() => setPageStart((s) => s - 12)} style={ps.navButton}><Text style={ps.navArrow}>{"\u2039"}</Text></TouchableOpacity>
+              <Text style={ps.navTitle}>{pageStart} – {pageStart + 11}</Text>
+              <TouchableOpacity onPress={() => setPageStart((s) => s + 12)} style={[ps.navButton, !canGoNext && ps.navButtonDisabled]} disabled={!canGoNext}><Text style={[ps.navArrow, !canGoNext && ps.navArrowDisabled]}>{"\u203A"}</Text></TouchableOpacity>
             </View>
-            <View style={pickerStyles.grid}>
+            <View style={ps.grid}>
               {yearRows.map((row, ri) => (
-                <View key={ri} style={pickerStyles.gridRow}>
+                <View key={ri} style={ps.gridRow}>
                   {row.map((y) => {
                     const disabled = y > currentYear;
                     const isCurrent = y === currentYear;
                     const isSelected = y === selectedYear;
                     return (
-                      <TouchableOpacity
-                        key={y}
-                        style={[
-                          pickerStyles.cell,
-                          isCurrent && pickerStyles.currentCell,
-                          isSelected && !isCurrent && pickerStyles.selectedCell,
-                        ]}
-                        onPress={() => { if (!disabled) { onSelect(y); onClose(); } }}
-                        disabled={disabled}
-                      >
-                        <Text
-                          style={[
-                            pickerStyles.cellText,
-                            isCurrent && pickerStyles.currentCellText,
-                            isSelected && !isCurrent && pickerStyles.selectedCellText,
-                            disabled && pickerStyles.disabledCellText,
-                          ]}
-                        >
-                          {y}
-                        </Text>
+                      <TouchableOpacity key={y} style={[ps.cell, isCurrent && ps.currentCell, isSelected && !isCurrent && ps.selectedCell]} onPress={() => { if (!disabled) { onSelect(y); onClose(); } }} disabled={disabled}>
+                        <Text style={[ps.cellText, isCurrent && ps.currentCellText, isSelected && !isCurrent && ps.selectedCellText, disabled && ps.disabledCellText]}>{y}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -465,89 +325,42 @@ function YearPickerModal({
   );
 }
 
-// ─── Week Picker Modal ───
-
-function WeekPickerModal({
-  visible,
-  onClose,
-  currentMonday,
-  todayDate,
-  onSelect,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  currentMonday: Date;
-  todayDate: Date;
-  onSelect: (monday: Date) => void;
-}) {
+function WeekPickerModal({ visible, onClose, currentMonday, todayDate, onSelect, colors }: { visible: boolean; onClose: () => void; currentMonday: Date; todayDate: Date; onSelect: (monday: Date) => void; colors: ThemeColors }) {
+  const ps = createPickerStyles(colors);
+  const ws = createWeekPickerStyles(colors);
   const [viewYear, setViewYear] = useState(currentMonday.getFullYear());
   const [viewMonth, setViewMonth] = useState(currentMonday.getMonth());
-
-  useEffect(() => {
-    if (visible) {
-      setViewYear(currentMonday.getFullYear());
-      setViewMonth(currentMonday.getMonth());
-    }
-  }, [visible, currentMonday]);
-
-  const canGoNext =
-    viewYear < todayDate.getFullYear() ||
-    (viewYear === todayDate.getFullYear() && viewMonth < todayDate.getMonth());
-
+  useEffect(() => { if (visible) { setViewYear(currentMonday.getFullYear()); setViewMonth(currentMonday.getMonth()); } }, [visible, currentMonday]);
+  const canGoNext = viewYear < todayDate.getFullYear() || (viewYear === todayDate.getFullYear() && viewMonth < todayDate.getMonth());
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
-
   const wpDayLabels = ["S", "M", "T", "W", "T", "F", "S"];
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
   const rows: (number | null)[][] = [];
   for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
   const lastRow = rows[rows.length - 1];
   while (lastRow.length < 7) lastRow.push(null);
-
   const todayStr = formatDateStr(todayDate);
   const currentMondayStr = formatDateStr(currentMonday);
-
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
-      <TouchableOpacity style={pickerStyles.overlay} activeOpacity={1} onPress={onClose}>
+      <TouchableOpacity style={ps.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-          <View style={pickerStyles.container}>
-            <View style={pickerStyles.nav}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
-                  else setViewMonth((m) => m - 1);
-                }}
-                style={pickerStyles.navButton}
-              >
-                <Text style={pickerStyles.navArrow}>{"\u2039"}</Text>
-              </TouchableOpacity>
-              <Text style={pickerStyles.navTitle}>
-                {MONTH_SHORT[viewMonth]} {viewYear}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); }
-                  else setViewMonth((m) => m + 1);
-                }}
-                style={[pickerStyles.navButton, !canGoNext && pickerStyles.navButtonDisabled]}
-                disabled={!canGoNext}
-              >
-                <Text style={[pickerStyles.navArrow, !canGoNext && pickerStyles.navArrowDisabled]}>{"\u203A"}</Text>
-              </TouchableOpacity>
+          <View style={ps.container}>
+            <View style={ps.nav}>
+              <TouchableOpacity onPress={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); } else setViewMonth((m) => m - 1); }} style={ps.navButton}><Text style={ps.navArrow}>{"\u2039"}</Text></TouchableOpacity>
+              <Text style={ps.navTitle}>{MONTH_SHORT[viewMonth]} {viewYear}</Text>
+              <TouchableOpacity onPress={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); } else setViewMonth((m) => m + 1); }} style={[ps.navButton, !canGoNext && ps.navButtonDisabled]} disabled={!canGoNext}><Text style={[ps.navArrow, !canGoNext && ps.navArrowDisabled]}>{"\u203A"}</Text></TouchableOpacity>
             </View>
-            <View style={weekPickerStyles.dayLabelsRow}>
-              {wpDayLabels.map((label, i) => (
-                <Text key={i} style={weekPickerStyles.dayLabel}>{label}</Text>
-              ))}
+            <View style={ws.dayLabelsRow}>
+              {wpDayLabels.map((label, i) => (<Text key={i} style={ws.dayLabel}>{label}</Text>))}
             </View>
             {rows.map((row, ri) => (
-              <View key={ri} style={weekPickerStyles.calRow}>
+              <View key={ri} style={ws.calRow}>
                 {row.map((day, ci) => {
-                  if (day === null) return <View key={`e-${ci}`} style={weekPickerStyles.calCell} />;
+                  if (day === null) return <View key={`e-${ci}`} style={ws.calCell} />;
                   const cellDate = new Date(viewYear, viewMonth, day);
                   const dateStr = formatDateStr(cellDate);
                   const isFuture = cellDate > todayDate;
@@ -555,23 +368,8 @@ function WeekPickerModal({
                   const cellMonday = getMonday(cellDate);
                   const isInCurrentWeek = formatDateStr(cellMonday) === currentMondayStr;
                   return (
-                    <TouchableOpacity
-                      key={`d-${day}`}
-                      style={[
-                        weekPickerStyles.calCell,
-                        isInCurrentWeek && weekPickerStyles.selectedDayCell,
-                        isToday && weekPickerStyles.todayDayCell,
-                      ]}
-                      disabled={isFuture}
-                      onPress={() => { onSelect(getMonday(cellDate)); onClose(); }}
-                    >
-                      <Text style={[
-                        weekPickerStyles.calDayText,
-                        isToday && weekPickerStyles.todayDayText,
-                        isFuture && weekPickerStyles.futureDayText,
-                      ]}>
-                        {day}
-                      </Text>
+                    <TouchableOpacity key={`d-${day}`} style={[ws.calCell, isInCurrentWeek && ws.selectedDayCell, isToday && ws.todayDayCell]} disabled={isFuture} onPress={() => { onSelect(getMonday(cellDate)); onClose(); }}>
+                      <Text style={[ws.calDayText, isToday && ws.todayDayText, isFuture && ws.futureDayText]}>{day}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -584,7 +382,8 @@ function WeekPickerModal({
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
+function StatBox({ label, value, colors }: { label: string; value: string; colors: ThemeColors }) {
+  const styles = createStyles(colors);
   return (
     <View style={styles.statBox}>
       <Text style={styles.statBoxValue}>{value}</Text>
@@ -593,75 +392,44 @@ function StatBox({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HabitHeader({ habit }: { habit: Habit }) {
+function HabitHeader({ habit, colors }: { habit: Habit; colors: ThemeColors }) {
+  const styles = createStyles(colors);
   return (
     <View style={styles.habitHeader}>
       <View style={styles.habitHeaderLeft}>
         <Text style={styles.habitIcon}>{habit.icon}</Text>
         <Text style={styles.habitName}>{habit.name}</Text>
-        <View
-          style={[styles.colorDot, { backgroundColor: habit.color }]}
-        />
+        <View style={[styles.colorDot, { backgroundColor: habit.color }]} />
       </View>
     </View>
   );
 }
 
-function MonthlyGrid({
-  habit,
-  entriesByDate,
-  todayStr,
-  year,
-  month,
-}: {
-  habit: Habit;
-  entriesByDate: Map<string, HabitEntry>;
-  todayStr: string;
-  year: number;
-  month: number;
-}) {
+function MonthlyGrid({ habit, entriesByDate, todayStr, year, month, colors }: { habit: Habit; entriesByDate: Map<string, HabitEntry>; todayStr: string; year: number; month: number; colors: ThemeColors }) {
+  const styles = createStyles(colors);
   const today = new Date(todayStr + "T00:00:00");
   const daysInMonth = getDaysInMonth(year, month);
   const firstDayOfWeek = new Date(year, month, 1).getDay();
-
   const { width: screenWidth } = useWindowDimensions();
-  // card: marginHorizontal 16 + padding 16 each side = 64, cell margin 2 each side = 4 per cell, 7 cells = 28
   const cellSize = Math.floor((screenWidth - 64 - 28) / 7);
-
   const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  // Build rows of 7
   const rows: (number | null)[][] = [];
   for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
   const lastRow = rows[rows.length - 1];
   while (lastRow.length < 7) lastRow.push(null);
-
   const scheduleData = parseScheduleJson(habit.schedule_json);
-
   return (
     <View>
       <View style={styles.monthCalRow}>
-        {dayLabels.map((label, i) => (
-          <Text key={i} style={[styles.monthDayLabel, { width: cellSize, marginHorizontal: 2 }]}>
-            {label}
-          </Text>
-        ))}
+        {dayLabels.map((label, i) => (<Text key={i} style={[styles.monthDayLabel, { width: cellSize, marginHorizontal: 2 }]}>{label}</Text>))}
       </View>
       {rows.map((row, ri) => (
         <View key={ri} style={styles.monthCalRow}>
           {row.map((day, ci) => {
-            if (day === null) {
-              return (
-                <View
-                  key={`empty-${ri}-${ci}`}
-                  style={{ width: cellSize, height: cellSize, margin: 2, borderRadius: 6 }}
-                />
-              );
-            }
-
+            if (day === null) return <View key={`empty-${ri}-${ci}`} style={{ width: cellSize, height: cellSize, margin: 2, borderRadius: 6 }} />;
             const cellDate = new Date(year, month, day);
             const dateStr = formatDateStr(cellDate);
             const isToday = dateStr === todayStr;
@@ -669,38 +437,14 @@ function MonthlyGrid({
             const scheduled = isScheduledForDate(scheduleData, cellDate);
             const entry = entriesByDate.get(dateStr);
             const completed = scheduled && isCompletedForDate(habit, entry);
-
-            let bgColor = "#D1D5DB";
+            let bgColor = colors.cellDefault;
             let opacity = 1;
-            if (isFuture) {
-              bgColor = "#D1D5DB";
-              opacity = 0.25;
-            } else if (completed) {
-              bgColor = habit.color;
-            } else if (!scheduled) {
-              bgColor = "#F3F4F6";
-            }
-
+            if (isFuture) { bgColor = colors.cellDefault; opacity = 0.25; }
+            else if (completed) { bgColor = habit.color; }
+            else if (!scheduled) { bgColor = colors.cellUnscheduled; }
             return (
-              <View
-                key={`day-${day}`}
-                style={[
-                  {
-                    width: cellSize,
-                    height: cellSize,
-                    margin: 2,
-                    borderRadius: 6,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: bgColor,
-                    opacity,
-                  },
-                  isToday && styles.todayCell,
-                ]}
-              >
-                <Text style={[styles.monthCalDayText, isToday && styles.monthCalTodayText]}>
-                  {day}
-                </Text>
+              <View key={`day-${day}`} style={[{ width: cellSize, height: cellSize, margin: 2, borderRadius: 6, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: bgColor, opacity }, isToday && styles.todayCell]}>
+                <Text style={[styles.monthCalDayText, isToday && styles.monthCalTodayText]}>{day}</Text>
               </View>
             );
           })}
@@ -710,80 +454,37 @@ function MonthlyGrid({
   );
 }
 
-function YearlyGrid({
-  habit,
-  entriesByDate,
-  todayStr,
-  year,
-}: {
-  habit: Habit;
-  entriesByDate: Map<string, HabitEntry>;
-  todayStr: string;
-  year: number;
-}) {
+function YearlyGrid({ habit, entriesByDate, todayStr, year, colors }: { habit: Habit; entriesByDate: Map<string, HabitEntry>; todayStr: string; year: number; colors: ThemeColors }) {
+  const styles = createStyles(colors);
   const today = new Date(todayStr + "T00:00:00");
   const startOfYear = new Date(year, 0, 1);
   const startDay = startOfYear.getDay();
-
   const scheduleData = parseScheduleJson(habit.schedule_json);
-
   const weeks: (Date | null)[][] = [];
   let currentWeek: (Date | null)[] = [];
   for (let i = 0; i < startDay; i++) currentWeek.push(null);
-
   const d = new Date(startOfYear);
-  while (d.getFullYear() === year) {
-    currentWeek.push(new Date(d));
-    if (currentWeek.length === 7) {
-      weeks.push(currentWeek);
-      currentWeek = [];
-    }
-    d.setDate(d.getDate() + 1);
-  }
-  if (currentWeek.length > 0) {
-    while (currentWeek.length < 7) currentWeek.push(null);
-    weeks.push(currentWeek);
-  }
-
+  while (d.getFullYear() === year) { currentWeek.push(new Date(d)); if (currentWeek.length === 7) { weeks.push(currentWeek); currentWeek = []; } d.setDate(d.getDate() + 1); }
+  if (currentWeek.length > 0) { while (currentWeek.length < 7) currentWeek.push(null); weeks.push(currentWeek); }
   return (
     <View>
       {[0, 1, 2, 3, 4, 5, 6].map((row) => (
         <View key={row} style={styles.yearRow}>
           {weeks.map((week, wi) => {
             const cell = week[row];
-            if (!cell) {
-              return <View key={wi} style={styles.yearCell} />;
-            }
-
+            if (!cell) return <View key={wi} style={styles.yearCell} />;
             const dateStr = formatDateStr(cell);
             const isToday = dateStr === todayStr;
             const isFuture = cell > today;
             const scheduled = isScheduledForDate(scheduleData, cell);
             const entry = entriesByDate.get(dateStr);
-            const completed =
-              scheduled && isCompletedForDate(habit, entry);
-
-            let bgColor = "#D1D5DB";
+            const completed = scheduled && isCompletedForDate(habit, entry);
+            let bgColor = colors.cellDefault;
             let opacity = 1;
-            if (isFuture) {
-              bgColor = "#D1D5DB";
-              opacity = 0.25;
-            } else if (completed) {
-              bgColor = habit.color;
-            } else if (!scheduled) {
-              bgColor = "#F3F4F6";
-            }
-
-            return (
-              <View
-                key={wi}
-                style={[
-                  styles.yearCell,
-                  { backgroundColor: bgColor, opacity },
-                  isToday && styles.todayYearCell,
-                ]}
-              />
-            );
+            if (isFuture) { bgColor = colors.cellDefault; opacity = 0.25; }
+            else if (completed) { bgColor = habit.color; }
+            else if (!scheduled) { bgColor = colors.cellUnscheduled; }
+            return <View key={wi} style={[styles.yearCell, { backgroundColor: bgColor, opacity }, isToday && styles.todayYearCell]} />;
           })}
         </View>
       ))}
@@ -791,87 +492,38 @@ function YearlyGrid({
   );
 }
 
-// ─── Overview tab card (stat boxes only, no grids) ───
-
-function OverviewHabitCard({
-  habit,
-  entriesByDate,
-  todayStr,
-}: {
-  habit: Habit;
-  entriesByDate: Map<string, HabitEntry>;
-  todayStr: string;
-}) {
+function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: Habit; entriesByDate: Map<string, HabitEntry>; todayStr: string; colors: ThemeColors }) {
+  const styles = createStyles(colors);
   const scheduleData = parseScheduleJson(habit.schedule_json);
   const streaks = calcStreaks(habit, entriesByDate, todayStr);
-
   const today = new Date(todayStr + "T00:00:00");
   const year = today.getFullYear();
   const month = today.getMonth();
   const daysInMonth = getDaysInMonth(year, month);
-
   let monthCompleted = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const cellDate = new Date(year, month, d);
-    if (cellDate > today) break;
-    const dateStr = formatDateStr(cellDate);
-    if (isScheduledForDate(scheduleData, cellDate)) {
-      const entry = entriesByDate.get(dateStr);
-      if (isCompletedForDate(habit, entry)) monthCompleted++;
-    }
-  }
-
+  for (let d = 1; d <= daysInMonth; d++) { const cellDate = new Date(year, month, d); if (cellDate > today) break; const dateStr = formatDateStr(cellDate); if (isScheduledForDate(scheduleData, cellDate)) { const entry = entriesByDate.get(dateStr); if (isCompletedForDate(habit, entry)) monthCompleted++; } }
   let yearCompleted = 0;
   const startOfYear = new Date(year, 0, 1);
   const iter = new Date(startOfYear);
-  while (iter <= today) {
-    const dateStr = formatDateStr(iter);
-    if (isScheduledForDate(scheduleData, iter)) {
-      const entry = entriesByDate.get(dateStr);
-      if (isCompletedForDate(habit, entry)) yearCompleted++;
-    }
-    iter.setDate(iter.getDate() + 1);
-  }
-
+  while (iter <= today) { const dateStr = formatDateStr(iter); if (isScheduledForDate(scheduleData, iter)) { const entry = entriesByDate.get(dateStr); if (isCompletedForDate(habit, entry)) yearCompleted++; } iter.setDate(iter.getDate() + 1); }
   const modeLabel = scheduleData.habit_mode === "quit" ? "Quit" : "Build";
-
   return (
     <View style={styles.habitCard}>
       <View style={styles.habitHeader}>
         <View style={styles.habitHeaderLeft}>
           <Text style={styles.habitIcon}>{habit.icon}</Text>
           <Text style={styles.habitName}>{habit.name}</Text>
-          <View
-            style={[styles.colorDot, { backgroundColor: habit.color }]}
-          />
+          <View style={[styles.colorDot, { backgroundColor: habit.color }]} />
         </View>
-        <View
-          style={[
-            styles.modeBadge,
-            {
-              backgroundColor:
-                scheduleData.habit_mode === "quit" ? "#FEE2E2" : "#DCFCE7",
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.modeBadgeText,
-              {
-                color:
-                  scheduleData.habit_mode === "quit" ? "#DC2626" : "#16A34A",
-              },
-            ]}
-          >
-            {modeLabel}
-          </Text>
+        <View style={[styles.modeBadge, { backgroundColor: scheduleData.habit_mode === "quit" ? colors.dangerLight : colors.successLight }]}>
+          <Text style={[styles.modeBadgeText, { color: scheduleData.habit_mode === "quit" ? colors.danger : colors.success }]}>{modeLabel}</Text>
         </View>
       </View>
       <View style={styles.statsRow}>
-        <StatBox label="Current Streak" value={String(streaks.current)} />
-        <StatBox label="Best Streak" value={String(streaks.best)} />
-        <StatBox label="This Month" value={`${monthCompleted}/${daysInMonth}`} />
-        <StatBox label="This Year" value={String(yearCompleted)} />
+        <StatBox label="Current Streak" value={String(streaks.current)} colors={colors} />
+        <StatBox label="Best Streak" value={String(streaks.best)} colors={colors} />
+        <StatBox label="This Month" value={`${monthCompleted}/${daysInMonth}`} colors={colors} />
+        <StatBox label="This Year" value={String(yearCompleted)} colors={colors} />
       </View>
     </View>
   );
@@ -880,6 +532,8 @@ function OverviewHabitCard({
 // ─── Main screen ───
 
 export default function StatsScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const { habits, completedCount } = useHabits();
 
   const todayDate = useMemo(() => new Date(), []);
@@ -1100,11 +754,11 @@ export default function StatsScreen() {
       </View>
 
       {/* Tab bar */}
-      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabBar activeTab={activeTab} onTabChange={setActiveTab} colors={colors} />
 
       {isLoading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color={colors.accent} />
         </View>
       ) : activeHabits.length === 0 ? (
         <View style={styles.emptyState}>
@@ -1150,6 +804,7 @@ export default function StatsScreen() {
                     overviewEntries.get(habit.id) || new Map()
                   }
                   todayStr={todayStr}
+                  colors={colors}
                 />
               ))}
             </>
@@ -1164,6 +819,7 @@ export default function StatsScreen() {
                 onNext={goWeekNext}
                 nextDisabled={isCurrentWeek}
                 onLabelPress={() => setWeekPickerVisible(true)}
+                colors={colors}
               />
               <WeekPickerModal
                 visible={weekPickerVisible}
@@ -1171,6 +827,7 @@ export default function StatsScreen() {
                 currentMonday={weekStart}
                 todayDate={todayDate}
                 onSelect={(monday) => setWeekStart(monday)}
+                colors={colors}
               />
 
               {/* Day labels row (same layout as habit rows so labels align with squares) */}
@@ -1207,11 +864,11 @@ export default function StatsScreen() {
 
                         let bgColor: string;
                         if (isFuture || !scheduled) {
-                          bgColor = "#F3F4F6";
+                          bgColor = colors.cellUnscheduled;
                         } else if (completed) {
                           bgColor = habit.color;
                         } else {
-                          bgColor = "#D1D5DB";
+                          bgColor = colors.cellDefault;
                         }
 
                         return (
@@ -1241,6 +898,7 @@ export default function StatsScreen() {
                 onNext={goMonthNext}
                 nextDisabled={monthNextDisabled}
                 onLabelPress={() => setMonthPickerVisible(true)}
+                colors={colors}
               />
               <MonthPickerModal
                 visible={monthPickerVisible}
@@ -1253,6 +911,7 @@ export default function StatsScreen() {
                   setSelectedMonth(m);
                   setSelectedMonthYear(y);
                 }}
+                colors={colors}
               />
               {activeHabits.map((habit) => {
                 const entries = monthlyEntries.get(habit.id) || new Map();
@@ -1269,7 +928,7 @@ export default function StatsScreen() {
                 );
                 return (
                   <View key={habit.id} style={styles.habitCard}>
-                    <HabitHeader habit={habit} />
+                    <HabitHeader habit={habit} colors={colors} />
                     <Text style={styles.completionText}>
                       {stats.completed}/{stats.scheduled} completed ({stats.rate}%)
                     </Text>
@@ -1279,6 +938,7 @@ export default function StatsScreen() {
                       todayStr={todayStr}
                       year={selectedMonthYear}
                       month={selectedMonth}
+                      colors={colors}
                     />
                   </View>
                 );
@@ -1295,6 +955,7 @@ export default function StatsScreen() {
                 onNext={goYearNext}
                 nextDisabled={yearNextDisabled}
                 onLabelPress={() => setYearPickerVisible(true)}
+                colors={colors}
               />
               <YearPickerModal
                 visible={yearPickerVisible}
@@ -1302,6 +963,7 @@ export default function StatsScreen() {
                 selectedYear={selectedYear}
                 currentYear={currentYear}
                 onSelect={(y) => setSelectedYear(y)}
+                colors={colors}
               />
               {activeHabits.map((habit) => {
                 const entries = yearlyEntries.get(habit.id) || new Map();
@@ -1317,7 +979,7 @@ export default function StatsScreen() {
                 );
                 return (
                   <View key={habit.id} style={styles.habitCard}>
-                    <HabitHeader habit={habit} />
+                    <HabitHeader habit={habit} colors={colors} />
                     <Text style={styles.completionText}>
                       {stats.completed}/{stats.scheduled} completed ({stats.rate}%)
                     </Text>
@@ -1326,6 +988,7 @@ export default function StatsScreen() {
                       entriesByDate={entries}
                       todayStr={todayStr}
                       year={selectedYear}
+                      colors={colors}
                     />
                   </View>
                 );
@@ -1340,450 +1003,92 @@ export default function StatsScreen() {
 
 // ─── Styles ───
 
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F2F4F7",
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  contentContainer: {
-    paddingBottom: 32,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 8,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#111827",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#64748B",
-    marginTop: 2,
-  },
-
-  // Tab bar
-  tabBar: {
-    flexDirection: "row",
-    marginHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 10,
-    padding: 3,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    borderRadius: 8,
-  },
-  tabActive: {
-    backgroundColor: "#FFFFFF",
-  },
-  tabText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-  tabTextActive: {
-    color: "#111827",
-  },
-
-  // Nav row (month/year selector)
-  navRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 16,
-    marginBottom: 12,
-    paddingVertical: 8,
-  },
-  navArrow: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-  },
-  navArrowText: {
-    fontSize: 18,
-    color: "#3B82F6",
-  },
-  navArrowDisabled: {
-    color: "#D1D5DB",
-  },
-  navLabel: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#111827",
-    minWidth: 200,
-    textAlign: "center",
-  },
-  navLabelHint: {
-    fontSize: 11,
-    color: "#94A3B8",
-    textAlign: "center",
-    marginTop: 1,
-  },
-
-  // Summary card
-  summaryCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-  },
-  summaryItem: {
-    alignItems: "center",
-    flex: 1,
-  },
-  summaryValue: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#3B82F6",
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: "#64748B",
-    marginTop: 4,
-  },
-  summaryDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: "#E5E7EB",
-  },
-
-  // Habit card
-  habitCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  completionText: {
-    fontSize: 12,
-    color: "#64748B",
-    marginBottom: 8,
-  },
-  habitHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  habitHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  habitIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  habitName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-    marginRight: 8,
-    flexShrink: 1,
-  },
-  colorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  modeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  modeBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-
-  // Stats row
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  statBox: {
-    flex: 1,
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    paddingVertical: 8,
-    marginHorizontal: 2,
-  },
-  statBoxValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#111827",
-  },
-  statBoxLabel: {
-    fontSize: 10,
-    color: "#64748B",
-    marginTop: 2,
-  },
-
-  // Monthly grid (calendar layout)
-  monthCalRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-  },
-  monthDayLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#9CA3AF",
-    textAlign: "center",
-    marginBottom: 4,
-  },
-  monthCalDayText: {
-    fontSize: 11,
-    fontWeight: "500",
-    color: "#374151",
-  },
-  monthCalTodayText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  todayCell: {
-    borderWidth: 2,
-    borderColor: "#111827",
-  },
-
-  // Yearly grid
-  yearRow: {
-    flexDirection: "row",
-  },
-  yearCell: {
-    flex: 1,
-    aspectRatio: 1,
-    borderRadius: 1,
-    marginRight: 1,
-    marginBottom: 1,
-    backgroundColor: "#F3F4F6",
-  },
-  todayYearCell: {
-    borderWidth: 1,
-    borderColor: "#111827",
-  },
-
-  // Weekly grid
-  weekLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginBottom: 4,
-    paddingHorizontal: 12,
-  },
-  weekDayHeaderLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#64748B",
-    textAlign: "center",
-  },
-  weekHabitRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  weekHabitInfo: {
-    width: 120,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  weekHabitIcon: {
-    fontSize: 18,
-    marginRight: 6,
-  },
-  weekHabitName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-    flexShrink: 1,
-    marginRight: 4,
-  },
-  weekSquaresRow: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  weekSquare: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  weekTodaySquare: {
-    borderWidth: 2,
-    borderColor: "#111827",
-  },
-
-  // Empty state
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#64748B",
-    textAlign: "center",
-  },
+const createStyles = (colors: ThemeColors) => ({
+  container: { flex: 1 as const, backgroundColor: colors.background },
+  centered: { flex: 1 as const, justifyContent: "center" as const, alignItems: "center" as const },
+  contentContainer: { paddingBottom: 32 },
+  header: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
+  title: { fontSize: 28, fontWeight: "bold" as const, color: colors.text },
+  subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
+  tabBar: { flexDirection: "row" as const, marginHorizontal: 16, marginBottom: 12, backgroundColor: colors.tabBarBackground, borderRadius: 10, padding: 3 },
+  tab: { flex: 1 as const, paddingVertical: 8, alignItems: "center" as const, borderRadius: 8 },
+  tabActive: { backgroundColor: colors.tabBarActiveBackground },
+  tabText: { fontSize: 12, fontWeight: "600" as const, color: colors.textSecondary },
+  tabTextActive: { color: colors.text },
+  navRow: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, marginHorizontal: 16, marginBottom: 12, paddingVertical: 8 },
+  navArrow: { paddingHorizontal: 16, paddingVertical: 4 },
+  navArrowText: { fontSize: 18, color: colors.accent },
+  navArrowDisabled: { color: colors.handleBar },
+  navLabel: { fontSize: 17, fontWeight: "700" as const, color: colors.text, minWidth: 200, textAlign: "center" as const },
+  navLabelHint: { fontSize: 11, color: colors.textTertiary, textAlign: "center" as const, marginTop: 1 },
+  summaryCard: { backgroundColor: colors.card, borderRadius: 16, padding: 20, marginHorizontal: 16, marginBottom: 16 },
+  summaryRow: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-around" as const },
+  summaryItem: { alignItems: "center" as const, flex: 1 as const },
+  summaryValue: { fontSize: 24, fontWeight: "bold" as const, color: colors.statHighlight },
+  summaryLabel: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  summaryDivider: { width: 1, height: 32, backgroundColor: colors.border },
+  habitCard: { backgroundColor: colors.card, borderRadius: 16, padding: 16, marginHorizontal: 16, marginBottom: 16 },
+  completionText: { fontSize: 12, color: colors.textSecondary, marginBottom: 8 },
+  habitHeader: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, marginBottom: 12 },
+  habitHeaderLeft: { flexDirection: "row" as const, alignItems: "center" as const, flex: 1 as const },
+  habitIcon: { fontSize: 20, marginRight: 8 },
+  habitName: { fontSize: 16, fontWeight: "600" as const, color: colors.text, marginRight: 8, flexShrink: 1 },
+  colorDot: { width: 8, height: 8, borderRadius: 4 },
+  modeBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  modeBadgeText: { fontSize: 11, fontWeight: "600" as const },
+  statsRow: { flexDirection: "row" as const, justifyContent: "space-between" as const, marginBottom: 4 },
+  statBox: { flex: 1 as const, alignItems: "center" as const, backgroundColor: colors.backgroundSecondary, borderRadius: 8, paddingVertical: 8, marginHorizontal: 2 },
+  statBoxValue: { fontSize: 16, fontWeight: "bold" as const, color: colors.text },
+  statBoxLabel: { fontSize: 10, color: colors.textSecondary, marginTop: 2 },
+  monthCalRow: { flexDirection: "row" as const, justifyContent: "center" as const },
+  monthDayLabel: { fontSize: 12, fontWeight: "600" as const, color: colors.textTertiary, textAlign: "center" as const, marginBottom: 4 },
+  monthCalDayText: { fontSize: 11, fontWeight: "500" as const, color: colors.text },
+  monthCalTodayText: { color: colors.textInverse, fontWeight: "700" as const },
+  todayCell: { borderWidth: 2, borderColor: colors.text },
+  yearRow: { flexDirection: "row" as const },
+  yearCell: { flex: 1 as const, aspectRatio: 1, borderRadius: 1, marginRight: 1, marginBottom: 1, backgroundColor: colors.cellUnscheduled },
+  todayYearCell: { borderWidth: 1, borderColor: colors.text },
+  weekLabelRow: { flexDirection: "row" as const, alignItems: "center" as const, marginHorizontal: 16, marginBottom: 4, paddingHorizontal: 12 },
+  weekDayHeaderLabel: { fontSize: 11, fontWeight: "600" as const, color: colors.textSecondary, textAlign: "center" as const },
+  weekHabitRow: { flexDirection: "row" as const, alignItems: "center" as const, backgroundColor: colors.card, borderRadius: 12, marginHorizontal: 16, marginBottom: 8, paddingVertical: 12, paddingHorizontal: 12 },
+  weekHabitInfo: { width: 120, flexDirection: "row" as const, alignItems: "center" as const },
+  weekHabitIcon: { fontSize: 18, marginRight: 6 },
+  weekHabitName: { fontSize: 14, fontWeight: "600" as const, color: colors.text, flexShrink: 1, marginRight: 4 },
+  weekSquaresRow: { flex: 1 as const, flexDirection: "row" as const, justifyContent: "space-around" as const },
+  weekSquare: { width: 32, height: 32, borderRadius: 6, alignItems: "center" as const, justifyContent: "center" as const },
+  weekTodaySquare: { borderWidth: 2, borderColor: colors.text },
+  emptyState: { flex: 1 as const, alignItems: "center" as const, justifyContent: "center" as const, padding: 40 },
+  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: "center" as const },
 });
 
-const pickerStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  container: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
-    width: 320,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  nav: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  navButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  navButtonDisabled: {
-    backgroundColor: "#F9FAFB",
-  },
-  navArrow: {
-    fontSize: 24,
-    color: "#374151",
-    fontWeight: "300",
-  },
-  navArrowDisabled: {
-    color: "#D1D5DB",
-  },
-  navTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#0F172A",
-    textAlign: "center",
-  },
-  grid: {
-    paddingVertical: 8,
-  },
-  gridRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  cell: {
-    flex: 1,
-    marginHorizontal: 4,
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-  },
-  currentCell: {
-    backgroundColor: "#3B82F6",
-  },
-  selectedCell: {
-    backgroundColor: "#E0F2FE",
-    borderWidth: 2,
-    borderColor: "#0EA5E9",
-  },
-  cellText: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#374151",
-  },
-  currentCellText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
-  selectedCellText: {
-    color: "#0369A1",
-    fontWeight: "600",
-  },
-  disabledCellText: {
-    color: "#D1D5DB",
-  },
+const createPickerStyles = (colors: ThemeColors) => ({
+  overlay: { flex: 1 as const, backgroundColor: colors.overlay, justifyContent: "center" as const, alignItems: "center" as const },
+  container: { backgroundColor: colors.card, borderRadius: 16, padding: 16, width: 320, shadowColor: colors.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 },
+  nav: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, marginBottom: 16 },
+  navButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.buttonBackground, justifyContent: "center" as const, alignItems: "center" as const },
+  navButtonDisabled: { backgroundColor: colors.backgroundSecondary },
+  navArrow: { fontSize: 24, color: colors.text, fontWeight: "300" as const },
+  navArrowDisabled: { color: colors.handleBar },
+  navTitle: { fontSize: 18, fontWeight: "600" as const, color: colors.text, textAlign: "center" as const },
+  grid: { paddingVertical: 8 },
+  gridRow: { flexDirection: "row" as const, justifyContent: "space-between" as const, marginBottom: 8 },
+  cell: { flex: 1 as const, marginHorizontal: 4, paddingVertical: 14, borderRadius: 10, backgroundColor: colors.buttonBackground, alignItems: "center" as const },
+  currentCell: { backgroundColor: colors.accent },
+  selectedCell: { backgroundColor: colors.accentLight, borderWidth: 2, borderColor: colors.accent },
+  cellText: { fontSize: 15, fontWeight: "500" as const, color: colors.text },
+  currentCellText: { color: colors.textInverse, fontWeight: "600" as const },
+  selectedCellText: { color: colors.accent, fontWeight: "600" as const },
+  disabledCellText: { color: colors.handleBar },
 });
 
-const weekPickerStyles = StyleSheet.create({
-  dayLabelsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 4,
-  },
-  dayLabel: {
-    width: 36,
-    textAlign: "center",
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#9CA3AF",
-  },
-  calRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 4,
-  },
-  calCell: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  selectedDayCell: {
-    backgroundColor: "#E0F2FE",
-  },
-  todayDayCell: {
-    backgroundColor: "#3B82F6",
-  },
-  calDayText: {
-    fontSize: 14,
-    color: "#374151",
-  },
-  todayDayText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  futureDayText: {
-    color: "#D1D5DB",
-  },
+const createWeekPickerStyles = (colors: ThemeColors) => ({
+  dayLabelsRow: { flexDirection: "row" as const, justifyContent: "space-around" as const, marginBottom: 4 },
+  dayLabel: { width: 36, textAlign: "center" as const, fontSize: 12, fontWeight: "600" as const, color: colors.textTertiary },
+  calRow: { flexDirection: "row" as const, justifyContent: "space-around" as const, marginBottom: 4 },
+  calCell: { width: 36, height: 36, borderRadius: 18, justifyContent: "center" as const, alignItems: "center" as const },
+  selectedDayCell: { backgroundColor: colors.accentLight },
+  todayDayCell: { backgroundColor: colors.accent },
+  calDayText: { fontSize: 14, color: colors.text },
+  todayDayText: { color: colors.textInverse, fontWeight: "700" as const },
+  futureDayText: { color: colors.handleBar },
 });
