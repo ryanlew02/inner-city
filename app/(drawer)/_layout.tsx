@@ -11,7 +11,7 @@ export default function DrawerLayout() {
         initialRouteName="habits"
         screenOptions={{
           headerShown: true,
-          drawerStyle: { backgroundColor: colors.drawerBackground },
+          drawerStyle: { backgroundColor: colors.drawerBackground, width: '65%' },
           headerStyle: { backgroundColor: colors.headerBackground },
           headerTintColor: colors.text,
           drawerActiveTintColor: colors.drawerActiveText,

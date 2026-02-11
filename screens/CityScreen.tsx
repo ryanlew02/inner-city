@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useCallback, useRef, useState, memo } from "react";
 import { Image, ImageSourcePropType, Text, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withDecay } from "react-native-reanimated";
@@ -110,19 +110,15 @@ interface CitySize {
 }
 
 function getCitySize(buildingCount: number): CitySize {
-  const expansionThresholds = [
-    { threshold: 0, blocks: 1 },
-    { threshold: 3, blocks: 2 },
-    { threshold: 12, blocks: 3 },
-    { threshold: 30, blocks: 4 },
-    { threshold: 56, blocks: 5 },
-  ];
-
+  // Start at 1 block and keep expanding whenever plots fill up.
+  // Each block tier has (blocksPerSide * 2)² plots.
+  // Expand when buildings reach ~75% of current capacity.
   let blocksPerSide = 1;
-  for (const tier of expansionThresholds) {
-    if (buildingCount >= tier.threshold) {
-      blocksPerSide = tier.blocks;
-    }
+  while (true) {
+    const plotsPerSide = blocksPerSide * 2;
+    const maxPlots = plotsPerSide * plotsPerSide;
+    if (buildingCount < maxPlots || blocksPerSide >= 100) break;
+    blocksPerSide++;
   }
 
   const gridSize = 1 + (blocksPerSide * 3);
@@ -138,6 +134,75 @@ function getCitySize(buildingCount: number): CitySize {
 }
 
 const grassTile = require("../assets/Sprites/LandscapeTiles/grass.png");
+
+// Memoized tile components to avoid re-rendering every tile on pan/zoom
+const PlotTile = memo(function PlotTile({ screenX, containerTop, grassTop, building, buildingTopInContainer, zIndex }: {
+  screenX: number; containerTop: number; grassTop: number;
+  building: PlacedBuilding | null; buildingTopInContainer: number; zIndex: number;
+}) {
+  if (!building) {
+    // Empty plot — single Image, no wrapper View
+    return (
+      <Image
+        source={grassTile}
+        style={{
+          position: "absolute" as const,
+          width: TILE_WIDTH,
+          height: TILE_HEIGHT,
+          left: screenX,
+          top: containerTop + grassTop,
+          zIndex,
+        }}
+      />
+    );
+  }
+  const spriteStyle = getBuildingSpriteStyle(building);
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute" as const,
+        left: screenX,
+        top: containerTop,
+        width: TILE_WIDTH,
+        height: TILE_HEIGHT + PLOT_CONTAINER_EXTRA_TOP,
+        zIndex,
+      }}
+    >
+      <Image source={grassTile} style={{ width: TILE_WIDTH, height: TILE_HEIGHT, position: "absolute", left: 0, top: grassTop }} />
+      <Image
+        source={getBuildingSprite(building)}
+        resizeMode="contain"
+        style={{
+          position: "absolute" as const,
+          width: spriteStyle.width,
+          height: spriteStyle.height,
+          top: buildingTopInContainer + spriteStyle.top,
+          left: spriteStyle.left,
+        }}
+      />
+    </View>
+  );
+});
+
+// Road tile — single Image, no wrapper View
+const RoadTile = memo(function RoadTile({ screenX, screenY, tileType, zIndex }: {
+  screenX: number; screenY: number; tileType: string; zIndex: number;
+}) {
+  return (
+    <Image
+      source={roadSprites[tileType]}
+      style={{
+        position: "absolute" as const,
+        width: TILE_WIDTH,
+        height: TILE_HEIGHT,
+        left: screenX,
+        top: screenY,
+        zIndex,
+      }}
+    />
+  );
+});
 
 // RoadTilesSimple: filenames without parentheses so Metro can resolve on Android
 const roadSprites: Record<string, ImageSourcePropType> = {
@@ -540,8 +605,11 @@ export default function CityScreen() {
   const focalX = useSharedValue(0);
   const focalY = useSharedValue(0);
 
+  const isPinching = useSharedValue(false);
+
   const pinchGesture = Gesture.Pinch()
     .onStart((event) => {
+      isPinching.value = true;
       savedScale.value = scale.value;
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
@@ -556,22 +624,35 @@ export default function CityScreen() {
       translateY.value = focalY.value - (focalY.value - savedTranslateY.value) * scaleRatio;
       scale.value = newScale;
     })
-    .onEnd(() => {
+    .onEnd((event) => {
+      isPinching.value = false;
+      // Apply momentum to scale so zoom feels fluid after releasing
+      const clampedVelocity = Math.min(Math.max(event.velocity, -5), 5);
+      if (Math.abs(clampedVelocity) > 0.1) {
+        scale.value = withDecay({
+          velocity: clampedVelocity,
+          deceleration: 0.985,
+          clamp: [MIN_SCALE, MAX_SCALE],
+        });
+      }
       savedScale.value = scale.value;
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
     });
 
   const panGesture = Gesture.Pan()
+    .maxPointers(1)
     .onStart(() => {
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
     })
     .onUpdate((event) => {
+      if (isPinching.value) return;
       translateX.value = savedTranslateX.value + event.translationX;
       translateY.value = savedTranslateY.value + event.translationY;
     })
     .onEnd((event) => {
+      if (isPinching.value) return;
       // Momentum scrolling — continues in the direction of the flick
       translateX.value = withDecay({ velocity: event.velocityX, deceleration: 0.997 });
       translateY.value = withDecay({ velocity: event.velocityY, deceleration: 0.997 });
@@ -623,6 +704,7 @@ export default function CityScreen() {
 
   const singleTapGesture = Gesture.Tap()
     .numberOfTaps(1)
+    .maxDistance(10)
     .requireExternalGestureToFail(doubleTapGesture)
     .onEnd((e) => {
       runOnJS(handleTapPosition)(e.x, e.y);
@@ -673,12 +755,16 @@ export default function CityScreen() {
 
   const handleAutoBuildAll = async () => {
     const buildingsCanAfford = Math.floor(tokens / 3);
+    let built = 0;
     for (let i = 0; i < buildingsCanAfford; i++) {
       const randomType = PURCHASABLE_BUILDING_TYPES[
         Math.floor(Math.random() * PURCHASABLE_BUILDING_TYPES.length)
       ];
-      const success = await autoBuildBuilding(randomType, GRID_ROWS, GRID_COLS);
+      // Recalculate grid size each iteration so the city expands as we build
+      const currentSize = getCitySize(buildings.length + built);
+      const success = await autoBuildBuilding(randomType, currentSize.rows, currentSize.cols);
       if (!success) break;
+      built++;
     }
     setSheetVisible(false);
   };
@@ -723,95 +809,53 @@ export default function CityScreen() {
     setSelectedBuilding(undefined);
   };
 
-  const buildingMap = buildBuildingMap(buildings);
+  const buildingMap = useMemo(() => buildBuildingMap(buildings), [buildings]);
   const styles = createStyles(colors);
 
-  const renderTile = (row: number, col: number) => {
-    const tileType = getGridTileType(row, col, GRID_ROWS, GRID_COLS);
-    if (!tileType) return null;
-
-    const building = tileType === "plot" ? buildingMap.get(`${row},${col}`) ?? null : null;
-    const rotation = getTileRotation(tileType);
-    const isPlot = tileType === "plot";
-
-    const isoPos = gridToIso(row, col);
-    const screenX = isoPos.x + isoBounds.offsetX;
-    const screenY = isoPos.y + isoBounds.offsetY;
-    const zIndex = (row + col) * 10;
-
-    if (isPlot) {
-      const spriteStyle = building ? getBuildingSpriteStyle(building) : null;
-
-      const containerTop = screenY - PLOT_CONTAINER_EXTRA_TOP;
-      const containerHeight = TILE_HEIGHT + PLOT_CONTAINER_EXTRA_TOP;
-      const grassTop = PLOT_CONTAINER_EXTRA_TOP;
-      const buildingTopInContainer = PLOT_CONTAINER_EXTRA_TOP > 0 ? 0 : BUILDING_SPRITE_SIZE.offsetY;
-
-      return (
-        <View
-          key={`${row}-${col}`}
-          pointerEvents="none"
-          style={[
-            styles.tileContainerBase,
-            {
-              left: screenX,
-              top: containerTop,
-              width: TILE_WIDTH,
-              height: containerHeight,
-              zIndex,
-            },
-          ]}
-        >
-          <Image source={grassTile} style={[styles.tile, { position: "absolute", left: 0, top: grassTop }]} />
-          {building && spriteStyle && (
-            <Image
-              source={getBuildingSprite(building)}
-              resizeMode="contain"
-              style={[
-                styles.buildingSpriteBase,
-                {
-                  width: spriteStyle.width,
-                  height: spriteStyle.height,
-                  top: buildingTopInContainer + spriteStyle.top,
-                  left: spriteStyle.left,
-                },
-              ]}
-            />
-          )}
-        </View>
-      );
-    }
-
-    // Render road tiles
-    return (
-      <View
-        key={`${row}-${col}`}
-        style={[
-          styles.tileContainer,
-          {
-            left: screenX,
-            top: screenY,
-            zIndex,
-          },
-        ]}
-      >
-        <Image
-          source={roadSprites[tileType]}
-          style={[styles.tile, { transform: [{ rotate: rotation }] }]}
-        />
-      </View>
-    );
-  };
-
-  const renderGrid = () => {
+  const gridTiles = useMemo(() => {
     const tiles = [];
+    const containerTop = -PLOT_CONTAINER_EXTRA_TOP;
+    const grassTop = PLOT_CONTAINER_EXTRA_TOP;
+    const buildingTopInContainer = PLOT_CONTAINER_EXTRA_TOP > 0 ? 0 : BUILDING_SPRITE_SIZE.offsetY;
+
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let c = 0; c < GRID_COLS; c++) {
-        tiles.push(renderTile(r, c));
+        const tileType = getGridTileType(r, c, GRID_ROWS, GRID_COLS);
+        if (!tileType) continue;
+
+        const isoPos = gridToIso(r, c);
+        const screenX = isoPos.x + isoBounds.offsetX;
+        const screenY = isoPos.y + isoBounds.offsetY;
+        const zIndex = (r + c) * 10;
+
+        if (tileType === "plot") {
+          const building = buildingMap.get(`${r},${c}`) ?? null;
+          tiles.push(
+            <PlotTile
+              key={`${r}-${c}`}
+              screenX={screenX}
+              containerTop={screenY + containerTop}
+              grassTop={grassTop}
+              building={building}
+              buildingTopInContainer={buildingTopInContainer}
+              zIndex={zIndex}
+            />
+          );
+        } else {
+          tiles.push(
+            <RoadTile
+              key={`${r}-${c}`}
+              screenX={screenX}
+              screenY={screenY}
+              tileType={tileType}
+              zIndex={zIndex}
+            />
+          );
+        }
       }
     }
     return tiles;
-  };
+  }, [GRID_ROWS, GRID_COLS, buildingMap, isoBounds]);
 
   return (
     <View style={styles.container}>
@@ -847,7 +891,7 @@ export default function CityScreen() {
               animatedGridStyle,
             ]}
           >
-            {renderGrid()}
+            {gridTiles}
           </Animated.View>
         </View>
       </GestureDetector>

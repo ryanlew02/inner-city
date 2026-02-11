@@ -232,16 +232,11 @@ export async function clearAllBuildings(): Promise<void> {
 
 // getCitySize logic (duplicated from CityScreen to avoid circular deps)
 function getCitySizeForMigration(buildingCount: number): { rows: number; cols: number } {
-  const thresholds = [
-    { threshold: 0, blocks: 1 },
-    { threshold: 3, blocks: 2 },
-    { threshold: 12, blocks: 3 },
-    { threshold: 30, blocks: 4 },
-    { threshold: 56, blocks: 5 },
-  ];
   let blocksPerSide = 1;
-  for (const t of thresholds) {
-    if (buildingCount >= t.threshold) blocksPerSide = t.blocks;
+  while (true) {
+    const maxPlots = (blocksPerSide * 2) ** 2;
+    if (buildingCount < maxPlots || blocksPerSide >= 100) break;
+    blocksPerSide++;
   }
   const gridSize = 1 + blocksPerSide * 3;
   return { rows: gridSize, cols: gridSize };
