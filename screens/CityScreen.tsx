@@ -517,7 +517,6 @@ export default function CityScreen() {
     demolishBuilding,
     getBuildingAtPosition,
     refreshTokens,
-    resetCity,
   } = useBuildings();
 
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
@@ -873,10 +872,6 @@ export default function CityScreen() {
           <Text style={styles.autoBuildButtonText}>+ Auto Build</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.resetButton} onPress={resetCity}>
-          <Text style={styles.resetButtonText}>Reset City (Testing)</Text>
-        </TouchableOpacity>
-
         <Text style={styles.messageText}>
           {buildingCount === 0
             ? "Tap an empty plot or use Auto Build to start!"
@@ -1029,15 +1024,6 @@ function createStyles(colors: ThemeColors) {
       color: colors.textInverse,
       fontSize: 16,
       fontWeight: "bold" as const,
-    },
-    resetButton: {
-      alignItems: "center" as const,
-      marginTop: 8,
-      paddingVertical: 8,
-    },
-    resetButtonText: {
-      color: colors.danger,
-      fontSize: 12,
     },
     messageText: {
       fontSize: 14,

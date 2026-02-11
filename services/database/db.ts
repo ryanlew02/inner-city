@@ -154,6 +154,13 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
       console.warn('Legacy constraint cleanup (non-fatal):', e);
     }
 
+    // Migration: Add sort_order column to habits table
+    try {
+      await db.execAsync(`ALTER TABLE habits ADD COLUMN sort_order INTEGER DEFAULT 0`);
+    } catch (e) {
+      // Column already exists, ignore
+    }
+
     // Migrate existing buildings from plot_index to grid_row/grid_col
     try {
       const { migrateToGridCoordinates } = require('./buildingService');

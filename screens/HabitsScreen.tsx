@@ -506,6 +506,7 @@ export default function HabitsScreen() {
     isHabitScheduledForToday,
     isHabitScheduledForDate,
     archiveHabit,
+    reorderHabits,
     updateEntryValue,
     getEntryValue,
     loading,
@@ -526,6 +527,9 @@ export default function HabitsScreen() {
 
   // Info tooltip state
   const [infoVisible, setInfoVisible] = useState(false);
+
+  // Edit mode state
+  const [editMode, setEditMode] = useState(false);
 
   // Calendar modal state
   const [calendarVisible, setCalendarVisible] = useState(false);
@@ -674,10 +678,22 @@ export default function HabitsScreen() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Daily Habits</Text>
-        <Text style={styles.subtitle}>
-          {completedCount} of {habits.length} completed
-        </Text>
+        <View style={styles.headerRow}>
+          <View style={styles.headerTitles}>
+            <Text style={styles.title}>Daily Habits</Text>
+            <Text style={styles.subtitle}>
+              {completedCount} of {habits.length} completed
+            </Text>
+          </View>
+          {habits.length > 1 && (
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => setEditMode(!editMode)}
+            >
+              <Text style={styles.editButtonText}>{editMode ? 'Done' : 'Edit Order'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Date Navigator */}
@@ -725,14 +741,48 @@ export default function HabitsScreen() {
             <Text style={styles.emptySubtext}>Tap the + button to create your first habit</Text>
           </View>
         ) : (
-          habits.map((habit) => {
+          habits.map((habit, index) => {
             const completed = isHabitCompleted(habit.id);
             const isScheduledForDay = isScheduledForViewingDate(habit.id);
-            const isSwipingThis = swipeProgress?.habitId === habit.id;
+            const isSwipingThis = !editMode && swipeProgress?.habitId === habit.id;
             const tx = isSwipingThis ? swipeProgress.translationX : 0;
             const { increment: swipeIncrement, previewValue: swipePreviewValue } = isSwipingThis
               ? getSwipeProgress(habit, tx)
               : { increment: 0, previewValue: null };
+
+            if (editMode) {
+              return (
+                <View key={habit.id} style={styles.editRow}>
+                  <View style={styles.reorderButtons}>
+                    <TouchableOpacity
+                      style={[styles.reorderButton, index === 0 && styles.reorderButtonHidden]}
+                      onPress={() => reorderHabits(index, index - 1)}
+                      disabled={index === 0}
+                    >
+                      <Text style={styles.reorderButtonText}>▲</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.reorderButton, index === habits.length - 1 && styles.reorderButtonHidden]}
+                      onPress={() => reorderHabits(index, index + 1)}
+                      disabled={index === habits.length - 1}
+                    >
+                      <Text style={styles.reorderButtonText}>▼</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.editTileWrapper}>
+                    <HabitTile
+                      habit={habit}
+                      completed={completed}
+                      currentValue={getEntryValue(habit.id)}
+                      isScheduledToday={isScheduledForDay}
+                      onTap={() => {}}
+                      onLongPress={() => {}}
+                      colors={colors}
+                    />
+                  </View>
+                </View>
+              );
+            }
 
             return (
               <RightSwipeGestureWrapper
@@ -805,6 +855,15 @@ export default function HabitsScreen() {
             <View style={styles.infoRow}>
               <Text style={styles.infoIcon}>⋯</Text>
               <Text style={styles.infoText}>Long press a habit for options (reset, edit, delete)</Text>
+            </View>
+            <Text style={styles.infoModalTitle}>Quit Habits</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>✓</Text>
+              <Text style={styles.infoText}>Quit habits start completed each day — you're succeeding by not doing it</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>✗</Text>
+              <Text style={styles.infoText}>Tap a quit habit to mark that you slipped up. Tap again to undo</Text>
             </View>
             <TouchableOpacity
               style={styles.infoCloseButton}
@@ -1114,6 +1173,53 @@ function createStyles(colors: ThemeColors) {
       paddingTop: 16,
       paddingBottom: 12,
     },
+    headerRow: {
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
+      justifyContent: "space-between" as const,
+    },
+    headerTitles: {
+      flex: 1,
+    },
+    editButton: {
+      paddingVertical: 6,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      backgroundColor: colors.buttonBackground,
+      marginTop: 2,
+    },
+    editButtonText: {
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: colors.accent,
+    },
+    editRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      marginBottom: 12,
+    },
+    reorderButtons: {
+      marginRight: 8,
+      gap: 4,
+    },
+    reorderButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: colors.buttonBackground,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    reorderButtonHidden: {
+      opacity: 0,
+    },
+    reorderButtonText: {
+      fontSize: 14,
+      color: colors.text,
+    },
+    editTileWrapper: {
+      flex: 1,
+    },
     title: {
       fontSize: 26,
       fontWeight: "700" as const,
@@ -1234,8 +1340,8 @@ function createStyles(colors: ThemeColors) {
       left: 0,
       top: 0,
       bottom: 0,
-      borderTopLeftRadius: 14,
-      borderBottomLeftRadius: 14,
+      borderTopRightRadius: 14,
+      borderBottomRightRadius: 14,
     },
     progressFillSwipe: {
       position: "absolute" as const,
@@ -1251,7 +1357,6 @@ function createStyles(colors: ThemeColors) {
       top: 0,
       bottom: 0,
       right: 0,
-      borderRadius: 14,
     },
     swipeFeedback: {
       position: "absolute" as const,

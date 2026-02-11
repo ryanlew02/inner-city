@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, ReactNode } fro
 import { AppState, AppStateStatus } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { Habit, HabitEntry, parseScheduleJson, isScheduledForToday, isScheduledForDate } from "../types/habit";
-import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb } from "../services/database/habitService";
+import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb, updateHabitOrder } from "../services/database/habitService";
 import { getEntriesForDate, upsertEntry, deleteEntryForHabit } from "../services/database/entryService";
 import { generateUUID } from "../services/database/db";
 import { addTokens as addTokensDb } from "../services/database/tokenService";
@@ -15,9 +15,10 @@ type HabitsContextType = {
   toggleHabit: (id: string) => void;
   updateEntryValue: (habitId: string, value: number) => Promise<void>;
   getEntryValue: (habitId: string) => number;
-  addHabit: (habit: Omit<Habit, 'id' | 'created_at' | 'archived'>) => Promise<Habit>;
+  addHabit: (habit: Omit<Habit, 'id' | 'created_at' | 'archived' | 'sort_order'>) => Promise<Habit>;
   updateHabit: (id: string, updates: Partial<Omit<Habit, 'id' | 'created_at'>>) => Promise<void>;
   archiveHabit: (id: string) => Promise<void>;
+  reorderHabits: (fromIndex: number, toIndex: number) => void;
   completedCount: number;
   isHabitCompleted: (habitId: string) => boolean;
   isHabitScheduledForToday: (habitId: string) => boolean;
@@ -140,6 +141,12 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     const habit = habits.find(h => h.id === habitId);
     if (!habit) return false;
 
+    // Don't count dates before the habit was created
+    const viewingDateObj = new Date(viewingDate + 'T00:00:00');
+    const createdDate = new Date(habit.created_at);
+    createdDate.setHours(0, 0, 0, 0);
+    if (viewingDateObj < createdDate) return false;
+
     const scheduleData = parseScheduleJson(habit.schedule_json);
     const isQuitHabit = scheduleData.habit_mode === 'quit';
 
@@ -171,11 +178,19 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
 
-    const wasCompleted = isHabitCompleted(id);
     const existingEntry = entries.get(id);
+    const scheduleData = parseScheduleJson(habit.schedule_json);
+    const isQuitCheck = scheduleData.habit_mode === 'quit' && habit.target_type === 'check';
+
+    // For quit check habits, toggle is inverted:
+    // - No entry (or value 0) = completed (didn't do the bad thing)
+    // - Tapping marks that you DID the bad thing (creates entry with value 1)
+    // - Tapping again undoes it (deletes the entry)
+    const hasEntry = existingEntry && existingEntry.value >= 1;
+    const shouldRemove = isQuitCheck ? hasEntry : isHabitCompleted(id);
 
     if (useInMemory.current) {
-      if (wasCompleted) {
+      if (shouldRemove) {
         setEntries(prev => {
           const newMap = new Map(prev);
           newMap.delete(id);
@@ -195,7 +210,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           newMap.set(id, newEntry);
           return newMap;
         });
-        if (!existingEntry || existingEntry.value === 0) {
+        if (!isQuitCheck && (!existingEntry || existingEntry.value === 0)) {
           playCompletionSound();
           onTokenEarned?.();
         }
@@ -204,7 +219,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      if (wasCompleted) {
+      if (shouldRemove) {
         await deleteEntryForHabit(id, viewingDate);
         setEntries(prev => {
           const newMap = new Map(prev);
@@ -223,7 +238,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           newMap.set(id, newEntry);
           return newMap;
         });
-        if (!existingEntry || existingEntry.value === 0) {
+        if (!isQuitCheck && (!existingEntry || existingEntry.value === 0)) {
           playCompletionSound();
           await addTokensDb(1);
           onTokenEarned?.();
@@ -313,7 +328,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addHabit = async (habit: Omit<Habit, 'id' | 'created_at' | 'archived'>): Promise<Habit> => {
+  const addHabit = async (habit: Omit<Habit, 'id' | 'created_at' | 'archived' | 'sort_order'>): Promise<Habit> => {
     if (useInMemory.current) {
       // In-memory fallback
       const newHabit: Habit = {
@@ -328,8 +343,9 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         target_value: habit.target_value || 1,
         schedule_type: habit.schedule_type || 'daily',
         schedule_json: habit.schedule_json || '{}',
+        sort_order: 0,
       };
-      setHabits(prev => [newHabit, ...prev]);
+      setHabits(prev => [newHabit, ...prev.map(h => ({ ...h, sort_order: h.sort_order + 1 }))]);
       return newHabit;
     }
 
@@ -374,6 +390,21 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     setHabits(prev => prev.filter(h => h.id !== id));
   };
 
+  const reorderHabits = (fromIndex: number, toIndex: number) => {
+    setHabits(prev => {
+      const newHabits = [...prev];
+      const [moved] = newHabits.splice(fromIndex, 1);
+      newHabits.splice(toIndex, 0, moved);
+      // Assign new sort_order values
+      const updated = newHabits.map((h, i) => ({ ...h, sort_order: i }));
+      // Persist to DB
+      if (!useInMemory.current) {
+        updateHabitOrder(updated.map(h => ({ id: h.id, sort_order: h.sort_order }))).catch(console.error);
+      }
+      return updated;
+    });
+  };
+
   const isHabitScheduledForToday = (habitId: string): boolean => {
     const habit = habits.find(h => h.id === habitId);
     if (!habit) return false;
@@ -402,6 +433,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       addHabit,
       updateHabit,
       archiveHabit,
+      reorderHabits,
       completedCount,
       isHabitCompleted,
       isHabitScheduledForToday,

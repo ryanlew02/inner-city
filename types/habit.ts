@@ -10,6 +10,7 @@ export type Habit = {
   target_value: number;
   schedule_type: 'daily' | 'weekly' | 'custom';
   schedule_json: string;
+  sort_order: number;
 };
 
 export type ScheduleData = {

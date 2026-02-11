@@ -4,12 +4,12 @@ import { Habit } from '../../types/habit';
 export async function getAllHabits(): Promise<Habit[]> {
   const db = await getDatabase();
   const result = await db.getAllAsync<Habit>(
-    'SELECT * FROM habits WHERE archived = 0 ORDER BY created_at DESC'
+    'SELECT * FROM habits WHERE archived = 0 ORDER BY sort_order ASC, created_at DESC'
   );
   return result;
 }
 
-export async function createHabit(habit: Omit<Habit, 'id' | 'created_at' | 'archived'>): Promise<Habit> {
+export async function createHabit(habit: Omit<Habit, 'id' | 'created_at' | 'archived' | 'sort_order'>): Promise<Habit> {
   const db = await getDatabase();
   const id = generateUUID();
   const created_at = Date.now();
@@ -23,9 +23,12 @@ export async function createHabit(habit: Omit<Habit, 'id' | 'created_at' | 'arch
   const schedule_type = habit.schedule_type || 'daily';
   const schedule_json = (habit.schedule_json || '{}').replace(/'/g, "''");
 
+  // Shift existing habits down so new habit appears at top (sort_order = 0)
+  await db.execAsync(`UPDATE habits SET sort_order = sort_order + 1 WHERE archived = 0`);
+
   await db.execAsync(`
-    INSERT INTO habits (id, name, description, created_at, archived, color, icon, target_type, target_value, schedule_type, schedule_json)
-    VALUES ('${id}', '${name}', '${description}', ${created_at}, 0, '${color}', '${icon}', '${target_type}', ${target_value}, '${schedule_type}', '${schedule_json}')
+    INSERT INTO habits (id, name, description, created_at, archived, color, icon, target_type, target_value, schedule_type, schedule_json, sort_order)
+    VALUES ('${id}', '${name}', '${description}', ${created_at}, 0, '${color}', '${icon}', '${target_type}', ${target_value}, '${schedule_type}', '${schedule_json}', 0)
   `);
 
   return {
@@ -40,6 +43,7 @@ export async function createHabit(habit: Omit<Habit, 'id' | 'created_at' | 'arch
     target_value: habit.target_value || 1,
     schedule_type: habit.schedule_type || 'daily',
     schedule_json: habit.schedule_json || '{}',
+    sort_order: 0,
   };
 }
 
@@ -86,4 +90,11 @@ export async function updateHabit(id: string, updates: Partial<Omit<Habit, 'id' 
 export async function archiveHabit(id: string): Promise<void> {
   const db = await getDatabase();
   await db.execAsync(`UPDATE habits SET archived = 1 WHERE id = '${id}'`);
+}
+
+export async function updateHabitOrder(habits: { id: string; sort_order: number }[]): Promise<void> {
+  const db = await getDatabase();
+  for (const habit of habits) {
+    await db.execAsync(`UPDATE habits SET sort_order = ${habit.sort_order} WHERE id = '${habit.id}'`);
+  }
 }

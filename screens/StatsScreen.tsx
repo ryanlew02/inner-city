@@ -47,8 +47,16 @@ function getDaysInMonth(year: number, month: number): number {
 
 function isCompletedForDate(
   habit: Habit,
-  entry: HabitEntry | undefined
+  entry: HabitEntry | undefined,
+  date?: Date
 ): boolean {
+  // Don't count dates before the habit was created
+  if (date) {
+    const createdDate = new Date(habit.created_at);
+    createdDate.setHours(0, 0, 0, 0);
+    if (date < createdDate) return false;
+  }
+
   const scheduleData = parseScheduleJson(habit.schedule_json);
   const isQuit = scheduleData.habit_mode === "quit";
 
@@ -126,13 +134,17 @@ function calcCompletionRate(
   const scheduleData = parseScheduleJson(habit.schedule_json);
   let completed = 0;
   let scheduled = 0;
-  const d = new Date(startDate);
+  // Don't count dates before the habit was created
+  const createdDate = new Date(habit.created_at);
+  createdDate.setHours(0, 0, 0, 0);
+  const effectiveStart = startDate > createdDate ? startDate : createdDate;
+  const d = new Date(effectiveStart);
   while (d <= endDate) {
     if (isScheduledForDate(scheduleData, d)) {
       scheduled++;
       const dateStr = formatDateStr(d);
       const entry = entriesByDate.get(dateStr);
-      if (isCompletedForDate(habit, entry)) completed++;
+      if (isCompletedForDate(habit, entry, d)) completed++;
     }
     d.setDate(d.getDate() + 1);
   }
@@ -436,7 +448,7 @@ function MonthlyGrid({ habit, entriesByDate, todayStr, year, month, colors }: { 
             const isFuture = cellDate > today;
             const scheduled = isScheduledForDate(scheduleData, cellDate);
             const entry = entriesByDate.get(dateStr);
-            const completed = scheduled && isCompletedForDate(habit, entry);
+            const completed = scheduled && isCompletedForDate(habit, entry, cellDate);
             let bgColor = colors.cellDefault;
             let opacity = 1;
             if (isFuture) { bgColor = colors.cellDefault; opacity = 0.25; }
@@ -456,6 +468,7 @@ function MonthlyGrid({ habit, entriesByDate, todayStr, year, month, colors }: { 
 
 function YearlyGrid({ habit, entriesByDate, todayStr, year, colors }: { habit: Habit; entriesByDate: Map<string, HabitEntry>; todayStr: string; year: number; colors: ThemeColors }) {
   const styles = createStyles(colors);
+  const { width: screenWidth } = useWindowDimensions();
   const today = new Date(todayStr + "T00:00:00");
   const startOfYear = new Date(year, 0, 1);
   const startDay = startOfYear.getDay();
@@ -466,25 +479,31 @@ function YearlyGrid({ habit, entriesByDate, todayStr, year, colors }: { habit: H
   const d = new Date(startOfYear);
   while (d.getFullYear() === year) { currentWeek.push(new Date(d)); if (currentWeek.length === 7) { weeks.push(currentWeek); currentWeek = []; } d.setDate(d.getDate() + 1); }
   if (currentWeek.length > 0) { while (currentWeek.length < 7) currentWeek.push(null); weeks.push(currentWeek); }
+  const gap = 1;
+  const margin = 16; // habitCard marginHorizontal
+  const cardPadding = 16; // habitCard padding
+  const gridPadding = 8; // small inset so it doesn't touch the card edge
+  const available = screenWidth - (margin * 2) - (gridPadding * 2);
+  const cellSize = Math.floor((available - (weeks.length - 1) * gap) / weeks.length);
   return (
-    <View>
+    <View style={{ marginHorizontal: -cardPadding + gridPadding }}>
       {[0, 1, 2, 3, 4, 5, 6].map((row) => (
         <View key={row} style={styles.yearRow}>
           {weeks.map((week, wi) => {
             const cell = week[row];
-            if (!cell) return <View key={wi} style={styles.yearCell} />;
+            if (!cell) return <View key={wi} style={[styles.yearCell, { width: cellSize, height: cellSize }]} />;
             const dateStr = formatDateStr(cell);
             const isToday = dateStr === todayStr;
             const isFuture = cell > today;
             const scheduled = isScheduledForDate(scheduleData, cell);
             const entry = entriesByDate.get(dateStr);
-            const completed = scheduled && isCompletedForDate(habit, entry);
+            const completed = scheduled && isCompletedForDate(habit, entry, cell);
             let bgColor = colors.cellDefault;
             let opacity = 1;
-            if (isFuture) { bgColor = colors.cellDefault; opacity = 0.25; }
+            if (isFuture) { opacity = 0.25; }
             else if (completed) { bgColor = habit.color; }
-            else if (!scheduled) { bgColor = colors.cellUnscheduled; }
-            return <View key={wi} style={[styles.yearCell, { backgroundColor: bgColor, opacity }, isToday && styles.todayYearCell]} />;
+            else if (!scheduled) { opacity = 0.35; }
+            return <View key={wi} style={[styles.yearCell, { width: cellSize, height: cellSize, backgroundColor: bgColor, opacity }, isToday && styles.todayYearCell]} />;
           })}
         </View>
       ))}
@@ -501,11 +520,11 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
   const month = today.getMonth();
   const daysInMonth = getDaysInMonth(year, month);
   let monthCompleted = 0;
-  for (let d = 1; d <= daysInMonth; d++) { const cellDate = new Date(year, month, d); if (cellDate > today) break; const dateStr = formatDateStr(cellDate); if (isScheduledForDate(scheduleData, cellDate)) { const entry = entriesByDate.get(dateStr); if (isCompletedForDate(habit, entry)) monthCompleted++; } }
+  for (let d = 1; d <= daysInMonth; d++) { const cellDate = new Date(year, month, d); if (cellDate > today) break; const dateStr = formatDateStr(cellDate); if (isScheduledForDate(scheduleData, cellDate)) { const entry = entriesByDate.get(dateStr); if (isCompletedForDate(habit, entry, cellDate)) monthCompleted++; } }
   let yearCompleted = 0;
   const startOfYear = new Date(year, 0, 1);
   const iter = new Date(startOfYear);
-  while (iter <= today) { const dateStr = formatDateStr(iter); if (isScheduledForDate(scheduleData, iter)) { const entry = entriesByDate.get(dateStr); if (isCompletedForDate(habit, entry)) yearCompleted++; } iter.setDate(iter.getDate() + 1); }
+  while (iter <= today) { const dateStr = formatDateStr(iter); if (isScheduledForDate(scheduleData, iter)) { const entry = entriesByDate.get(dateStr); if (isCompletedForDate(habit, entry, iter)) yearCompleted++; } iter.setDate(iter.getDate() + 1); }
   const modeLabel = scheduleData.habit_mode === "quit" ? "Quit" : "Build";
   return (
     <View style={styles.habitCard}>
@@ -830,6 +849,8 @@ export default function StatsScreen() {
                 colors={colors}
               />
 
+
+
               {/* Day labels row (same layout as habit rows so labels align with squares) */}
               <View style={styles.weekLabelRow}>
                 <View style={styles.weekHabitInfo} />
@@ -860,7 +881,7 @@ export default function StatsScreen() {
                         const isFuture = d > todayDate;
                         const scheduled = isScheduledForDate(scheduleData, d);
                         const entry = entriesByDate.get(dateStr);
-                        const completed = scheduled && !isFuture && isCompletedForDate(habit, entry);
+                        const completed = scheduled && !isFuture && isCompletedForDate(habit, entry, d);
 
                         let bgColor: string;
                         if (isFuture || !scheduled) {
@@ -913,6 +934,7 @@ export default function StatsScreen() {
                 }}
                 colors={colors}
               />
+
               {activeHabits.map((habit) => {
                 const entries = monthlyEntries.get(habit.id) || new Map();
                 const dim = getDaysInMonth(selectedMonthYear, selectedMonth);
@@ -965,6 +987,7 @@ export default function StatsScreen() {
                 onSelect={(y) => setSelectedYear(y)}
                 colors={colors}
               />
+
               {activeHabits.map((habit) => {
                 const entries = yearlyEntries.get(habit.id) || new Map();
                 const rangeEnd =
@@ -1046,7 +1069,7 @@ const createStyles = (colors: ThemeColors) => ({
   monthCalTodayText: { color: colors.textInverse, fontWeight: "700" as const },
   todayCell: { borderWidth: 2, borderColor: colors.text },
   yearRow: { flexDirection: "row" as const },
-  yearCell: { flex: 1 as const, aspectRatio: 1, borderRadius: 1, marginRight: 1, marginBottom: 1, backgroundColor: colors.cellUnscheduled },
+  yearCell: { borderRadius: 1, marginRight: 1, marginBottom: 1, backgroundColor: colors.cellUnscheduled },
   todayYearCell: { borderWidth: 1, borderColor: colors.text },
   weekLabelRow: { flexDirection: "row" as const, alignItems: "center" as const, marginHorizontal: 16, marginBottom: 4, paddingHorizontal: 12 },
   weekDayHeaderLabel: { fontSize: 11, fontWeight: "600" as const, color: colors.textSecondary, textAlign: "center" as const },
