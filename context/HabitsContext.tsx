@@ -6,6 +6,7 @@ import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit a
 import { getEntriesForDate, upsertEntry, deleteEntryForHabit } from "../services/database/entryService";
 import { generateUUID } from "../services/database/db";
 import { addTokens as addTokensDb } from "../services/database/tokenService";
+import { scheduleHabitNotifications, cancelHabitNotifications, rescheduleMonthlyNotifications } from "../services/notificationService";
 
 type HabitsContextType = {
   habits: Habit[];
@@ -79,6 +80,8 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           setViewingDateState(today);
           reloadEntriesForDate(today);
         }
+        // Reschedule days_of_month notifications (they use fixed dates)
+        rescheduleMonthlyNotifications(habits).catch(console.error);
       }
       appState.current = nextAppState;
     };
@@ -332,6 +335,12 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
 
     const newHabit = await createHabit(habit);
     setHabits(prev => [newHabit, ...prev]);
+
+    const scheduleData = parseScheduleJson(newHabit.schedule_json);
+    if (scheduleData.notification_enabled) {
+      scheduleHabitNotifications(newHabit).catch(console.error);
+    }
+
     return newHabit;
   };
 
@@ -342,6 +351,15 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     }
 
     await updateHabitDb(id, updates);
+    const updatedHabit = habits.find(h => h.id === id);
+    if (updatedHabit) {
+      const merged = { ...updatedHabit, ...updates };
+      const scheduleData = parseScheduleJson(merged.schedule_json);
+      await cancelHabitNotifications(id);
+      if (scheduleData.notification_enabled) {
+        scheduleHabitNotifications(merged as Habit).catch(console.error);
+      }
+    }
     setHabits(prev => prev.map(h => h.id === id ? { ...h, ...updates } : h));
   };
 
@@ -351,6 +369,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    await cancelHabitNotifications(id).catch(console.error);
     await archiveHabitDb(id);
     setHabits(prev => prev.filter(h => h.id !== id));
   };

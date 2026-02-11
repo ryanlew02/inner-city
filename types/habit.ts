@@ -17,6 +17,9 @@ export type ScheduleData = {
   specific_days?: number[];    // 0=Sun, 1=Mon, ..., 6=Sat
   times_per_week?: number;     // e.g., 3
   days_of_month?: number[];    // 1-31 for specific days of month
+  notification_enabled?: boolean;
+  notification_time?: string;    // "HH:MM" format, e.g. "09:00"
+  notification_message?: string; // custom message, empty = use default
 };
 
 export function parseScheduleJson(json: string): ScheduleData {
@@ -27,6 +30,9 @@ export function parseScheduleJson(json: string): ScheduleData {
       specific_days: parsed.specific_days,
       times_per_week: parsed.times_per_week,
       days_of_month: parsed.days_of_month,
+      notification_enabled: parsed.notification_enabled,
+      notification_time: parsed.notification_time,
+      notification_message: parsed.notification_message,
     };
   } catch {
     return { habit_mode: 'build' };

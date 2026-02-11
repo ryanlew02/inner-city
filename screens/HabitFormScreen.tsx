@@ -3,6 +3,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -14,6 +15,7 @@ import { useTheme } from "../context/ThemeContext";
 import { ThemeColors } from "../constants/Colors";
 import { parseScheduleJson, ScheduleData } from "../types/habit";
 import ColorPickerSimple from "../components/ColorPickerSimple";
+import { requestPermissions } from "../services/notificationService";
 
 const PRESET_COLORS = [
   // Row 1 - Soft pastels
@@ -33,6 +35,9 @@ const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 const getRandomColor = () => PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
 
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
+const MINUTES = [0, 15, 30, 45];
+
 type HabitForm = {
   name: string;
   description: string;
@@ -45,6 +50,11 @@ type HabitForm = {
   specific_days: number[];
   times_per_week: string;
   days_of_month: number[];
+  notification_enabled: boolean;
+  notification_hour: number;
+  notification_minute: number;
+  notification_ampm: "AM" | "PM";
+  notification_message: string;
 };
 
 const initialForm: HabitForm = {
@@ -59,6 +69,11 @@ const initialForm: HabitForm = {
   specific_days: [],
   times_per_week: "3",
   days_of_month: [],
+  notification_enabled: false,
+  notification_hour: 9,
+  notification_minute: 0,
+  notification_ampm: "AM",
+  notification_message: "",
 };
 
 export default function HabitFormScreen() {
@@ -100,6 +115,17 @@ export default function HabitFormScreen() {
           schedule_type = "times_per_week";
         }
 
+        // Parse notification time
+        let notifHour = 9;
+        let notifMinute = 0;
+        let notifAmpm: "AM" | "PM" = "AM";
+        if (scheduleData.notification_time) {
+          const [h, m] = scheduleData.notification_time.split(':').map(Number);
+          notifAmpm = h >= 12 ? "PM" : "AM";
+          notifHour = h % 12 || 12;
+          notifMinute = m;
+        }
+
         setForm({
           name: habit.name,
           description: habit.description || "",
@@ -112,6 +138,11 @@ export default function HabitFormScreen() {
           specific_days: scheduleData.specific_days || [],
           times_per_week: scheduleData.times_per_week?.toString() || "3",
           days_of_month: scheduleData.days_of_month || [],
+          notification_enabled: scheduleData.notification_enabled || false,
+          notification_hour: notifHour,
+          notification_minute: notifMinute,
+          notification_ampm: notifAmpm,
+          notification_message: scheduleData.notification_message || "",
         });
 
         const habitColor = habit.color || "#22C55E";
@@ -152,6 +183,18 @@ export default function HabitFormScreen() {
       scheduleData.times_per_week = parseInt(form.times_per_week) || 3;
     } else if (form.schedule_type === "days_of_month" && form.days_of_month.length > 0) {
       scheduleData.days_of_month = form.days_of_month;
+    }
+
+    if (form.notification_enabled) {
+      scheduleData.notification_enabled = true;
+      // Convert 12-hour to 24-hour format
+      let hour24 = form.notification_hour % 12;
+      if (form.notification_ampm === "PM") hour24 += 12;
+      const minuteStr = form.notification_minute.toString().padStart(2, '0');
+      scheduleData.notification_time = `${hour24.toString().padStart(2, '0')}:${minuteStr}`;
+      if (form.notification_message.trim()) {
+        scheduleData.notification_message = form.notification_message.trim();
+      }
     }
 
     const schedule_json = JSON.stringify(scheduleData);
@@ -356,6 +399,110 @@ export default function HabitFormScreen() {
           </View>
           <Text style={styles.schedulePreviewArrow}>›</Text>
         </TouchableOpacity>
+
+        <Text style={styles.label}>Reminder Notifications</Text>
+        <View style={styles.notificationToggleRow}>
+          <View style={styles.notificationToggleInfo}>
+            <Text style={styles.notificationToggleLabel}>Enable Reminders</Text>
+            <Text style={styles.notificationToggleDesc}>
+              Get notified on scheduled days
+            </Text>
+          </View>
+          <Switch
+            value={form.notification_enabled}
+            onValueChange={async (value) => {
+              if (value) {
+                const granted = await requestPermissions();
+                if (!granted) return;
+              }
+              setForm({ ...form, notification_enabled: value });
+            }}
+            trackColor={{ false: colors.border, true: form.color + "80" }}
+            thumbColor={form.notification_enabled ? form.color : colors.textTertiary}
+          />
+        </View>
+
+        {form.notification_enabled && (
+          <View style={styles.notificationSettings}>
+            <Text style={styles.notificationSettingsLabel}>Hour</Text>
+            <View style={styles.hourGrid}>
+              {HOURS.map((h) => (
+                <TouchableOpacity
+                  key={h}
+                  style={[
+                    styles.hourGridButton,
+                    form.notification_hour === h && { backgroundColor: form.color },
+                  ]}
+                  onPress={() => setForm({ ...form, notification_hour: h })}
+                >
+                  <Text
+                    style={[
+                      styles.hourGridButtonText,
+                      form.notification_hour === h && styles.timePickerButtonTextSelected,
+                    ]}
+                  >
+                    {h}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.notificationSettingsLabel, { marginTop: 4 }]}>Minute & Period</Text>
+            <View style={styles.minuteAmpmRow}>
+              {MINUTES.map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[
+                    styles.timePickerButton,
+                    form.notification_minute === m && { backgroundColor: form.color },
+                  ]}
+                  onPress={() => setForm({ ...form, notification_minute: m })}
+                >
+                  <Text
+                    style={[
+                      styles.timePickerButtonText,
+                      form.notification_minute === m && styles.timePickerButtonTextSelected,
+                    ]}
+                  >
+                    :{m.toString().padStart(2, '0')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <View style={styles.ampmDivider} />
+              {(["AM", "PM"] as const).map((period) => (
+                <TouchableOpacity
+                  key={period}
+                  style={[
+                    styles.timePickerButton,
+                    form.notification_ampm === period && { backgroundColor: form.color },
+                  ]}
+                  onPress={() => setForm({ ...form, notification_ampm: period })}
+                >
+                  <Text
+                    style={[
+                      styles.timePickerButtonText,
+                      form.notification_ampm === period && styles.timePickerButtonTextSelected,
+                    ]}
+                  >
+                    {period}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.timePreview}>
+              {form.notification_hour}:{form.notification_minute.toString().padStart(2, '0')} {form.notification_ampm}
+            </Text>
+
+            <Text style={styles.notificationSettingsLabel}>Custom Message (optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={form.notification_message}
+              onChangeText={(text) => setForm({ ...form, notification_message: text })}
+              placeholder={`Don't forget about your ${form.name || 'habit'} habit`}
+              placeholderTextColor={colors.textTertiary}
+            />
+          </View>
+        )}
 
         <View style={styles.buttonRow}>
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
@@ -1131,6 +1278,99 @@ function createStyles(colors: ThemeColors) {
       fontSize: 12,
       color: colors.textSecondary,
       marginTop: 12,
+      fontStyle: "italic" as const,
+    },
+    // Notification styles
+    notificationToggleRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    notificationToggleInfo: {
+      flex: 1,
+      marginRight: 12,
+    },
+    notificationToggleLabel: {
+      fontSize: 15,
+      color: colors.text,
+      fontWeight: "500" as const,
+    },
+    notificationToggleDesc: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    notificationSettings: {
+      marginTop: 12,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    notificationSettingsLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: 8,
+      fontWeight: "500" as const,
+    },
+    hourGrid: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: 8,
+      marginBottom: 4,
+    },
+    hourGridButton: {
+      width: 44,
+      height: 40,
+      borderRadius: 10,
+      backgroundColor: colors.backgroundSecondary,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    hourGridButtonText: {
+      fontSize: 16,
+      color: colors.text,
+      fontWeight: "600" as const,
+      textAlign: "center" as const,
+    },
+    minuteAmpmRow: {
+      flexDirection: "row" as const,
+      gap: 6,
+      alignItems: "center" as const,
+    },
+    timePickerButton: {
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 8,
+      backgroundColor: colors.backgroundSecondary,
+      alignItems: "center" as const,
+      minWidth: 44,
+    },
+    timePickerButtonText: {
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: "600" as const,
+    },
+    timePickerButtonTextSelected: {
+      color: colors.textInverse,
+    },
+    ampmDivider: {
+      width: 1,
+      height: 24,
+      backgroundColor: colors.border,
+      marginHorizontal: 4,
+    },
+    timePreview: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 6,
+      marginBottom: 16,
       fontStyle: "italic" as const,
     },
   };
