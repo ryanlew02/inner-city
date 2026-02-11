@@ -2,9 +2,10 @@ import { createContext, useContext, useState, useEffect, useRef, ReactNode } fro
 import { AppState, AppStateStatus } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { Habit, HabitEntry, parseScheduleJson, isScheduledForToday, isScheduledForDate } from "../types/habit";
-import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb, updateHabitOrder } from "../services/database/habitService";
+import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb, updateHabitOrder, clearAllHabitData as clearAllHabitDataDb } from "../services/database/habitService";
 import { getEntriesForDate, upsertEntry, deleteEntryForHabit } from "../services/database/entryService";
 import { generateUUID } from "../services/database/db";
+import { useSound } from "./SoundContext";
 import { addTokens as addTokensDb } from "../services/database/tokenService";
 import { scheduleHabitNotifications, cancelHabitNotifications, rescheduleMonthlyNotifications } from "../services/notificationService";
 
@@ -19,6 +20,7 @@ type HabitsContextType = {
   updateHabit: (id: string, updates: Partial<Omit<Habit, 'id' | 'created_at'>>) => Promise<void>;
   archiveHabit: (id: string) => Promise<void>;
   reorderHabits: (fromIndex: number, toIndex: number) => void;
+  resetHabitData: () => Promise<void>;
   completedCount: number;
   isHabitCompleted: (habitId: string) => boolean;
   isHabitScheduledForToday: (habitId: string) => boolean;
@@ -53,6 +55,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   const [currentDate, setCurrentDate] = useState(getTodayDate());
   const [viewingDate, setViewingDateState] = useState(getTodayDate());
   const [onTokenEarned, setOnTokenEarned] = useState<(() => void) | undefined>(undefined);
+  const { soundEnabled } = useSound();
   const useInMemory = useRef(false);
   const appState = useRef(AppState.currentState);
   const completionPlayer = useAudioPlayer(require("../assets/sounds/complete.wav"));
@@ -60,6 +63,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   const isViewingToday = viewingDate === currentDate;
 
   const playCompletionSound = () => {
+    if (!soundEnabled) return;
     completionPlayer.seekTo(0);
     completionPlayer.play();
   };
@@ -405,6 +409,17 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const resetHabitData = async (): Promise<void> => {
+    if (useInMemory.current) {
+      setHabits([]);
+      setEntries(new Map());
+      return;
+    }
+    await clearAllHabitDataDb();
+    setHabits([]);
+    setEntries(new Map());
+  };
+
   const isHabitScheduledForToday = (habitId: string): boolean => {
     const habit = habits.find(h => h.id === habitId);
     if (!habit) return false;
@@ -434,6 +449,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       updateHabit,
       archiveHabit,
       reorderHabits,
+      resetHabitData,
       completedCount,
       isHabitCompleted,
       isHabitScheduledForToday,

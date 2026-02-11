@@ -92,6 +92,12 @@ export async function archiveHabit(id: string): Promise<void> {
   await db.execAsync(`UPDATE habits SET archived = 1 WHERE id = '${id}'`);
 }
 
+export async function clearAllHabitData(): Promise<void> {
+  const db = await getDatabase();
+  await db.execAsync(`DELETE FROM habit_entries`);
+  await db.execAsync(`DELETE FROM habits`);
+}
+
 export async function updateHabitOrder(habits: { id: string; sort_order: number }[]): Promise<void> {
   const db = await getDatabase();
   for (const habit of habits) {

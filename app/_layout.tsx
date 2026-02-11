@@ -7,6 +7,7 @@ import "react-native-reanimated";
 import { HabitsProvider } from "../context/HabitsContext";
 import { BuildingProvider } from "../context/BuildingContext";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
+import { SoundProvider } from "../context/SoundContext";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -34,8 +35,9 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <HabitsProvider>
-        <BuildingProvider>
+      <SoundProvider>
+        <HabitsProvider>
+          <BuildingProvider>
           <ThemedStatusBar />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(drawer)" />
@@ -47,8 +49,9 @@ export default function RootLayout() {
               }}
             />
           </Stack>
-        </BuildingProvider>
-      </HabitsProvider>
+          </BuildingProvider>
+        </HabitsProvider>
+      </SoundProvider>
     </ThemeProvider>
   );
 }

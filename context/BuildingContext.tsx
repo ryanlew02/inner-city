@@ -24,6 +24,7 @@ import {
   getTokenCount,
   spendTokens as spendTokensDb,
 } from "../services/database/tokenService";
+import { useSound } from "./SoundContext";
 
 type BuildingContextType = {
   buildings: PlacedBuilding[];
@@ -47,11 +48,13 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
   const [buildings, setBuildings] = useState<PlacedBuilding[]>([]);
   const [tokens, setTokens] = useState(0);
   const [loading, setLoading] = useState(true);
+  const { soundEnabled } = useSound();
   const useInMemory = useRef(false);
   const buildingsRef = useRef<PlacedBuilding[]>([]);
   const buildPlayer = useAudioPlayer(require("../assets/sounds/build.wav"));
 
   const playBuildSound = () => {
+    if (!soundEnabled) return;
     buildPlayer.seekTo(0);
     buildPlayer.play();
   };

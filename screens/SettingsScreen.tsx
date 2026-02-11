@@ -10,9 +10,12 @@ import {
   Linking,
   Alert,
   ActivityIndicator,
+  Switch,
 } from "react-native";
 import { useBuildings } from "../context/BuildingContext";
+import { useHabits } from "../context/HabitsContext";
 import { useTheme } from "../context/ThemeContext";
+import { useSound } from "../context/SoundContext";
 import { ThemePreference } from "../services/database/themeService";
 import { ThemeColors } from "../constants/Colors";
 import { exportAllData, importAllData } from "../services/database/dataExportService";
@@ -29,25 +32,47 @@ const PREFERENCE_LABELS: Record<ThemePreference, string> = {
   dark: "Dark",
 };
 
+type ResetTarget = "city" | "habits" | null;
+
+const RESET_INFO: Record<"city" | "habits", { title: string; warning: string; buttonLabel: string }> = {
+  city: {
+    title: "Reset City",
+    warning: "This will permanently destroy all placed buildings. Your tokens will be kept. This action cannot be undone.",
+    buttonLabel: "Reset City",
+  },
+  habits: {
+    title: "Reset Habit Data",
+    warning: "This will permanently delete all habits and their history. Your city and tokens will be kept. This action cannot be undone.",
+    buttonLabel: "Reset Habit Data",
+  },
+};
+
 export default function SettingsScreen() {
   const { resetCity } = useBuildings();
+  const { resetHabitData } = useHabits();
   const { colors, preference, setPreference } = useTheme();
+  const { soundEnabled, setSoundEnabled } = useSound();
 
   const [appearanceVisible, setAppearanceVisible] = useState(false);
-  const [resetVisible, setResetVisible] = useState(false);
+  const [resetPickerVisible, setResetPickerVisible] = useState(false);
+  const [resetTarget, setResetTarget] = useState<ResetTarget>(null);
   const [privacyVisible, setPrivacyVisible] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
 
-  const handleReset = () => {
-    resetCity();
-    setResetVisible(false);
+  const handleResetConfirm = async () => {
+    if (resetTarget === "city") {
+      await resetCity();
+    } else if (resetTarget === "habits") {
+      await resetHabitData();
+    }
+    setResetTarget(null);
     setConfirmText("");
   };
 
   const handleResetClose = () => {
-    setResetVisible(false);
+    setResetTarget(null);
     setConfirmText("");
   };
 
@@ -109,14 +134,27 @@ export default function SettingsScreen() {
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
 
+          <View style={styles.menuRow}>
+            <View style={styles.menuRowLeft}>
+              <Text style={styles.menuRowLabel}>Sounds</Text>
+              <Text style={styles.menuRowSubtitle}>{soundEnabled ? "On" : "Off"}</Text>
+            </View>
+            <Switch
+              value={soundEnabled}
+              onValueChange={setSoundEnabled}
+              trackColor={{ false: colors.border, true: colors.accent }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
           <TouchableOpacity
             style={[styles.menuRow, styles.menuRowLast]}
             activeOpacity={0.6}
-            onPress={() => setResetVisible(true)}
+            onPress={() => setResetPickerVisible(true)}
           >
             <View style={styles.menuRowLeft}>
-              <Text style={styles.menuRowLabelDanger}>Reset City</Text>
-              <Text style={styles.menuRowSubtitle}>Remove all buildings</Text>
+              <Text style={styles.menuRowLabelDanger}>Reset Data</Text>
+              <Text style={styles.menuRowSubtitle}>Reset city or habit data</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
@@ -238,62 +276,115 @@ export default function SettingsScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Reset City Modal */}
+      {/* Reset Picker Modal */}
       <Modal
-        visible={resetVisible}
+        visible={resetPickerVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={handleResetClose}
+        onRequestClose={() => setResetPickerVisible(false)}
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={handleResetClose}>
+            <TouchableOpacity onPress={() => setResetPickerVisible(false)}>
               <Text style={styles.modalClose}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Reset City</Text>
+            <Text style={styles.modalTitle}>Reset Data</Text>
             <View style={styles.modalHeaderSpacer} />
           </View>
 
           <View style={styles.modalContent}>
-            <View style={styles.warningBox}>
-              <Text style={styles.warningText}>
-                This will permanently destroy all placed buildings. Your tokens will be kept.
-                This action cannot be undone.
-              </Text>
-            </View>
-
-            <Text style={styles.confirmLabel}>Type "confirm" to proceed</Text>
-            <TextInput
-              style={styles.confirmInput}
-              value={confirmText}
-              onChangeText={setConfirmText}
-              placeholder="confirm"
-              placeholderTextColor={colors.textTertiary}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            <TouchableOpacity
-              style={[
-                styles.resetButton,
-                confirmText.toLowerCase() !== "confirm" && styles.resetButtonDisabled,
-              ]}
-              onPress={handleReset}
-              disabled={confirmText.toLowerCase() !== "confirm"}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.resetButtonText,
-                  confirmText.toLowerCase() !== "confirm" && styles.resetButtonTextDisabled,
-                ]}
+            <View style={styles.resetOptions}>
+              <TouchableOpacity
+                style={styles.resetOptionRow}
+                activeOpacity={0.6}
+                onPress={() => {
+                  setResetPickerVisible(false);
+                  setResetTarget("city");
+                }}
               >
-                Reset City
-              </Text>
-            </TouchableOpacity>
+                <View style={styles.menuRowLeft}>
+                  <Text style={styles.menuRowLabelDanger}>Reset City</Text>
+                  <Text style={styles.menuRowSubtitle}>Remove all placed buildings</Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.resetOptionRow, styles.menuRowLast]}
+                activeOpacity={0.6}
+                onPress={() => {
+                  setResetPickerVisible(false);
+                  setResetTarget("habits");
+                }}
+              >
+                <View style={styles.menuRowLeft}>
+                  <Text style={styles.menuRowLabelDanger}>Reset Habit Data</Text>
+                  <Text style={styles.menuRowSubtitle}>Delete all habits and history</Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Reset Confirmation Modal */}
+      {resetTarget && (
+        <Modal
+          visible={true}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={handleResetClose}
+        >
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={handleResetClose}>
+                <Text style={styles.modalClose}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>{RESET_INFO[resetTarget].title}</Text>
+              <View style={styles.modalHeaderSpacer} />
+            </View>
+
+            <View style={styles.modalContent}>
+              <View style={styles.warningBox}>
+                <Text style={styles.warningText}>
+                  {RESET_INFO[resetTarget].warning}
+                </Text>
+              </View>
+
+              <Text style={styles.confirmLabel}>Type "confirm" to proceed</Text>
+              <TextInput
+                style={styles.confirmInput}
+                value={confirmText}
+                onChangeText={setConfirmText}
+                placeholder="confirm"
+                placeholderTextColor={colors.textTertiary}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.resetButton,
+                  confirmText.toLowerCase() !== "confirm" && styles.resetButtonDisabled,
+                ]}
+                onPress={handleResetConfirm}
+                disabled={confirmText.toLowerCase() !== "confirm"}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.resetButtonText,
+                    confirmText.toLowerCase() !== "confirm" && styles.resetButtonTextDisabled,
+                  ]}
+                >
+                  {RESET_INFO[resetTarget].buttonLabel}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
+        </Modal>
+      )}
       {/* Privacy Policy Modal */}
       <Modal
         visible={privacyVisible}
@@ -518,7 +609,22 @@ function createStyles(colors: ThemeColors) {
       marginTop: 2,
     },
 
-    // Reset modal
+    // Reset picker
+    resetOptions: {
+      borderRadius: 12,
+      overflow: "hidden" as const,
+    },
+    resetOptionRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      backgroundColor: colors.card,
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+
+    // Reset confirmation modal
     warningBox: {
       backgroundColor: colors.dangerLight,
       borderRadius: 12,
