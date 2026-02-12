@@ -8,6 +8,7 @@ import { HabitsProvider } from "../context/HabitsContext";
 import { BuildingProvider } from "../context/BuildingContext";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
 import { SoundProvider } from "../context/SoundContext";
+import { LanguageProvider } from "../context/LanguageContext";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -35,23 +36,25 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <SoundProvider>
-        <HabitsProvider>
-          <BuildingProvider>
-          <ThemedStatusBar />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(drawer)" />
-            <Stack.Screen
-              name="habit-form"
-              options={{
-                presentation: "modal",
-                headerShown: false,
-              }}
-            />
-          </Stack>
-          </BuildingProvider>
-        </HabitsProvider>
-      </SoundProvider>
+      <LanguageProvider>
+        <SoundProvider>
+          <HabitsProvider>
+            <BuildingProvider>
+            <ThemedStatusBar />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(drawer)" />
+              <Stack.Screen
+                name="habit-form"
+                options={{
+                  presentation: "modal",
+                  headerShown: false,
+                }}
+              />
+            </Stack>
+            </BuildingProvider>
+          </HabitsProvider>
+        </SoundProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

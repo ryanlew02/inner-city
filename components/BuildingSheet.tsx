@@ -12,6 +12,7 @@ import {
   Alert,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { ThemeColors } from "../constants/Colors";
 
 const buildCoin = require("../assets/images/build_coin.png");
@@ -41,12 +42,12 @@ interface BuildingSheetProps {
   onAutoBuildAll: () => void;
 }
 
-const BUILDING_LABELS: Record<BuildingType, string> = {
-  apartment: "Apartments",
-  house: "Houses",
-  office: "Offices",
-  factory: "Factory",
-  solarpanel: "Solar Panels",
+const BUILDING_LABEL_KEYS: Record<BuildingType, string> = {
+  apartment: "building.apartments",
+  house: "building.houses",
+  office: "building.offices",
+  factory: "building.factory",
+  solarpanel: "building.solarPanels",
 };
 
 const BUILDING_ICONS: Record<BuildingType, string> = {
@@ -70,6 +71,7 @@ export default function BuildingSheet({
   onAutoBuildAll,
 }: BuildingSheetProps) {
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const styles = createStyles(colors);
   const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
 
@@ -123,26 +125,26 @@ export default function BuildingSheet({
 
   const handleDemolish = () => {
     Alert.alert(
-      "Demolish Building?",
-      `This will destroy this building and refund ${demolishRefund} token${demolishRefund !== 1 ? 's' : ''}. This cannot be undone.`,
+      t('building.demolishConfirmTitle'),
+      t('building.demolishConfirmMessage', { count: demolishRefund, plural: demolishRefund !== 1 ? 's' : '' }),
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Demolish", style: "destructive", onPress: onDemolish },
+        { text: t('building.cancelButton'), style: "cancel" },
+        { text: t('building.demolish'), style: "destructive", onPress: onDemolish },
       ]
     );
   };
 
   const handleAutoBuildAll = () => {
     Alert.alert(
-      "Spend All Tokens?",
-      `This will spend ${buildingsCanAfford * BUILDING_COST} tokens to build ${buildingsCanAfford} random building${buildingsCanAfford !== 1 ? 's' : ''}. This cannot be undone.`,
+      t('building.spendAllTitle'),
+      t('building.spendAllMessage', { cost: buildingsCanAfford * BUILDING_COST, count: buildingsCanAfford, plural: buildingsCanAfford !== 1 ? 's' : '' }),
       [
         {
-          text: "Cancel",
+          text: t('building.cancelButton'),
           style: "cancel",
         },
         {
-          text: "Build All",
+          text: t('building.buildAllButton'),
           style: "destructive",
           onPress: onAutoBuildAll,
         },
@@ -155,11 +157,11 @@ export default function BuildingSheet({
   const getTitle = () => {
     switch (mode) {
       case "build":
-        return "Build New Building";
+        return t('building.buildNew');
       case "upgrade":
-        return "Upgrade Building";
+        return t('building.upgradeBuilding');
       case "autobuild":
-        return "Auto Build";
+        return t('building.autoBuild');
     }
   };
 
@@ -187,7 +189,7 @@ export default function BuildingSheet({
               <View style={styles.content}>
                 <View style={styles.autobuildContent}>
                   <Text style={styles.autobuildDescription}>
-                    Automatically place random buildings on empty plots.
+                    {t('building.autoBuildDesc')}
                   </Text>
 
                   <TouchableOpacity
@@ -205,13 +207,13 @@ export default function BuildingSheet({
                           styles.autobuildButtonTitle,
                           !canAffordBuilding && styles.textDisabled,
                         ]}>
-                          Build 1 Building
+                          {t('building.build1')}
                         </Text>
                         <Text style={[
                           styles.autobuildButtonCost,
                           !canAffordBuilding && styles.textDisabled,
                         ]}>
-                          {BUILDING_COST} tokens
+                          {t('building.tokens', { count: BUILDING_COST })}
                         </Text>
                       </View>
                     </View>
@@ -233,13 +235,13 @@ export default function BuildingSheet({
                           styles.autobuildButtonTitle,
                           buildingsCanAfford < 1 && styles.textDisabled,
                         ]}>
-                          Build All ({buildingsCanAfford})
+                          {t('building.buildAll', { count: buildingsCanAfford })}
                         </Text>
                         <Text style={[
                           styles.autobuildButtonCost,
                           buildingsCanAfford < 1 && styles.textDisabled,
                         ]}>
-                          {buildingsCanAfford * BUILDING_COST} tokens
+                          {t('building.tokens', { count: buildingsCanAfford * BUILDING_COST })}
                         </Text>
                       </View>
                     </View>
@@ -247,7 +249,7 @@ export default function BuildingSheet({
 
                   {!canAffordBuilding && (
                     <Text style={styles.insufficientTokens}>
-                      Not enough tokens. Complete habits to earn more!
+                      {t('building.notEnoughTokens')}
                     </Text>
                   )}
                 </View>
@@ -257,7 +259,7 @@ export default function BuildingSheet({
             {mode === "build" && (
               <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 <Text style={styles.costInfo}>
-                  Cost: {BUILDING_COST} tokens per building
+                  {t('building.costInfo', { cost: BUILDING_COST })}
                 </Text>
                 <View style={styles.buildingGrid}>
                   {PURCHASABLE_BUILDING_TYPES.slice(0, 3).map((type) => (
@@ -271,7 +273,7 @@ export default function BuildingSheet({
                       disabled={!canAffordBuilding}
                     >
                       <Text style={styles.buildingIcon}>{BUILDING_ICONS[type]}</Text>
-                      <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>{BUILDING_LABELS[type]}</Text>
+                      <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>{t(BUILDING_LABEL_KEYS[type])}</Text>
                     </TouchableOpacity>
                   ))}
                   {PURCHASABLE_BUILDING_TYPES.slice(3, 4).map((type) => (
@@ -285,7 +287,7 @@ export default function BuildingSheet({
                       disabled={!canAffordBuilding}
                     >
                       <Text style={styles.buildingIcon}>{BUILDING_ICONS[type]}</Text>
-                      <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>{BUILDING_LABELS[type]}</Text>
+                      <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>{t(BUILDING_LABEL_KEYS[type])}</Text>
                     </TouchableOpacity>
                   ))}
                   <TouchableOpacity
@@ -297,7 +299,7 @@ export default function BuildingSheet({
                     disabled={!canAffordBuilding}
                   >
                     <Text style={styles.buildingIcon}>{"\u{1F3B2}"}</Text>
-                    <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>Auto Build</Text>
+                    <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>{t('building.autoBuildLabel')}</Text>
                   </TouchableOpacity>
                   {PURCHASABLE_BUILDING_TYPES.slice(4).map((type) => (
                     <TouchableOpacity
@@ -310,13 +312,13 @@ export default function BuildingSheet({
                       disabled={!canAffordBuilding}
                     >
                       <Text style={styles.buildingIcon}>{BUILDING_ICONS[type]}</Text>
-                      <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>{BUILDING_LABELS[type]}</Text>
+                      <Text style={[styles.buildingLabel, !canAffordBuilding && styles.textDisabled]}>{t(BUILDING_LABEL_KEYS[type])}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
                 {!canAffordBuilding && (
                   <Text style={styles.insufficientTokens}>
-                    Not enough tokens. Complete habits to earn more!
+                    {t('building.notEnoughTokens')}
                   </Text>
                 )}
               </ScrollView>
@@ -331,20 +333,20 @@ export default function BuildingSheet({
                     </Text>
                     <View style={styles.buildingDetails}>
                       <Text style={styles.buildingNameCompact}>
-                        {BUILDING_LABELS[selectedBuilding.building_type]}
+                        {t(BUILDING_LABEL_KEYS[selectedBuilding.building_type])}
                       </Text>
                       <View style={styles.tierBadgeSmall}>
-                        <Text style={styles.tierTextSmall}>Tier {selectedBuilding.tier}</Text>
+                        <Text style={styles.tierTextSmall}>{t('building.tier', { tier: selectedBuilding.tier })}</Text>
                       </View>
                       <Text style={styles.builtDate}>
-                        Built {new Date(selectedBuilding.created_at).toLocaleDateString()}
+                        {t('building.built', { date: new Date(selectedBuilding.created_at).toLocaleDateString() })}
                       </Text>
                     </View>
                   </View>
 
                   {isMaxTier ? (
                     <View style={styles.maxTierMessageCompact}>
-                      <Text style={styles.maxTierTextCompact}>Currently at Max Level</Text>
+                      <Text style={styles.maxTierTextCompact}>{t('building.maxLevel')}</Text>
                     </View>
                   ) : (
                     <TouchableOpacity
@@ -362,7 +364,7 @@ export default function BuildingSheet({
                             !canAffordUpgrade && styles.textDisabled,
                           ]}
                         >
-                          Upgrade to Tier {selectedBuilding.tier + 1} for {upgradeCost}
+                          {t('building.upgradeTo', { tier: selectedBuilding.tier + 1, cost: upgradeCost })}
                         </Text>
                         <Image source={buildCoin} style={styles.tokenIconImageSmall} />
                       </View>
@@ -371,7 +373,7 @@ export default function BuildingSheet({
 
                   {!canAffordUpgrade && !isMaxTier && (
                     <Text style={styles.insufficientTokensCompact}>
-                      Need {upgradeCost - tokens} more tokens
+                      {t('building.needMore', { count: upgradeCost - tokens })}
                     </Text>
                   )}
 
@@ -380,7 +382,7 @@ export default function BuildingSheet({
                     onPress={handleDemolish}
                   >
                     <Text style={styles.demolishButtonText}>
-                      Demolish (refund {demolishRefund} token{demolishRefund !== 1 ? 's' : ''})
+                      {t('building.demolishRefund', { count: demolishRefund, plural: demolishRefund !== 1 ? 's' : '' })}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -388,7 +390,7 @@ export default function BuildingSheet({
             )}
 
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Text style={styles.closeButtonText}>Cancel</Text>
+              <Text style={styles.closeButtonText}>{t('building.cancelButton')}</Text>
             </TouchableOpacity>
           </Pressable>
         </Animated.View>

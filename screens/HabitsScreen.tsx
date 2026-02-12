@@ -17,6 +17,7 @@ import { runOnJS } from "react-native-reanimated";
 import { ThemeColors } from "../constants/Colors";
 import { useHabits } from "../context/HabitsContext";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { Habit, parseScheduleJson } from "../types/habit";
 
 const MIN_SWIPE_CHECK_PX = 40;
@@ -37,6 +38,7 @@ type CalendarModalProps = {
 };
 
 function CalendarModal({ visible, onClose, selectedDate, todayDate, onSelectDate, colors }: CalendarModalProps) {
+  const { t: tCal } = useLanguage();
   const calendarStyles = createCalendarStyles(colors);
   const [viewingMonth, setViewingMonth] = useState(() => {
     const date = new Date(selectedDate + 'T00:00:00');
@@ -199,7 +201,7 @@ function CalendarModal({ visible, onClose, selectedDate, todayDate, onSelectDate
                     : viewingMonth.year}
                 </Text>
                 <Text style={calendarStyles.monthTitleHint}>
-                  {pickerMode === 'day' ? 'Tap to pick month' : 'Tap to pick day'}
+                  {pickerMode === 'day' ? tCal('habits.tapToPickMonth') : tCal('habits.tapToPickDay')}
                 </Text>
               </TouchableOpacity>
 
@@ -309,7 +311,7 @@ function CalendarModal({ visible, onClose, selectedDate, todayDate, onSelectDate
 
             {/* Today Button */}
             <TouchableOpacity style={calendarStyles.todayButton} onPress={handleTodayPress}>
-              <Text style={calendarStyles.todayButtonText}>Go to Today</Text>
+              <Text style={calendarStyles.todayButtonText}>{tCal('habits.goToToday')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -369,10 +371,15 @@ type HabitTileProps = {
 };
 
 function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, onLongPress, swipeIncrement = 0, swipePreviewValue = null, colors }: HabitTileProps) {
+  const { t: tHabit } = useLanguage();
   const styles = createStyles(colors);
   const isProgressType = habit.target_type !== "check";
   const scheduleData = parseScheduleJson(habit.schedule_json);
   const isQuitHabit = scheduleData.habit_mode === 'quit';
+  const isQuitFailed = isQuitHabit && (
+    (isProgressType && currentValue > habit.target_value) ||
+    (!isProgressType && !completed)
+  );
 
   const displayValue = swipePreviewValue != null ? swipePreviewValue : currentValue;
   const progressPercent = isProgressType
@@ -402,8 +409,9 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
     <TouchableOpacity
       style={[
         styles.habitItem,
-        { borderLeftColor: color },
+        { borderLeftColor: isQuitFailed ? colors.textTertiary : color },
         !isScheduledToday && styles.habitItemDimmed,
+        isQuitFailed && styles.habitItemFailed,
       ]}
       onPress={onTap}
       onLongPress={onLongPress}
@@ -414,7 +422,7 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
         style={[
           styles.progressFill,
           {
-            backgroundColor: `${color}30`,
+            backgroundColor: isQuitFailed ? `${colors.textTertiary}30` : `${color}30`,
             width: `${progressPercent}%`,
           },
         ]}
@@ -440,11 +448,15 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
       <View
         style={[
           styles.checkbox,
-          { borderColor: habit.color || colors.success },
-          completed && { backgroundColor: habit.color || colors.success },
+          { borderColor: isQuitFailed ? colors.textTertiary : (habit.color || colors.success) },
+          isQuitFailed
+            ? { backgroundColor: colors.textTertiary }
+            : completed && { backgroundColor: habit.color || colors.success },
         ]}
       >
-        {completed && <Text style={styles.checkmark}>✓</Text>}
+        {isQuitFailed
+          ? <Text style={styles.checkmark}>✗</Text>
+          : completed && <Text style={styles.checkmark}>✓</Text>}
       </View>
       <View style={styles.habitInfo}>
         <View style={styles.habitHeader}>
@@ -452,20 +464,21 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
           <Text
             style={[
               styles.habitText,
-              completed && styles.habitTextCompleted,
+              isQuitFailed && styles.habitTextFailed,
+              completed && !isQuitFailed && styles.habitTextCompleted,
               !isScheduledToday && styles.habitTextDimmed,
             ]}
           >
             {habit.name}
           </Text>
-          {isQuitHabit && <View style={styles.quitBadge}><Text style={styles.quitBadgeText}>QUIT</Text></View>}
+          {isQuitHabit && <View style={styles.quitBadge}><Text style={styles.quitBadgeText}>{tHabit('habits.quit')}</Text></View>}
         </View>
         {!isScheduledToday ? (
-          <Text style={styles.notScheduledText}>Not scheduled for today</Text>
+          <Text style={styles.notScheduledText}>{tHabit('habits.notScheduled')}</Text>
         ) : habit.target_type !== "check" ? (
-          <Text style={styles.habitProgress}>
-            {currentValue} {isQuitHabit ? '/' : '/'} {habit.target_value} {getUnitLabel()}
-            {isQuitHabit && ` (limit)`}
+          <Text style={[styles.habitProgress, isQuitFailed && styles.habitProgressFailed]}>
+            {currentValue} / {habit.target_value} {getUnitLabel()}
+            {isQuitFailed ? ` (${tHabit('habits.limitExceeded')})` : isQuitHabit ? ` (${tHabit('habits.limit')})` : ''}
           </Text>
         ) : habit.description ? (
           <Text style={styles.habitDescription} numberOfLines={1}>
@@ -497,6 +510,7 @@ function addDays(dateStr: string, days: number): string {
 export default function HabitsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const styles = createStyles(colors);
   const {
     habits,
@@ -578,12 +592,12 @@ export default function HabitsScreen() {
     if (!optionsHabit) return;
 
     Alert.alert(
-      "Delete Habit",
-      `Are you sure you want to delete "${optionsHabit.name}"? This action cannot be undone.`,
+      t('habits.deleteConfirmTitle'),
+      t('habits.deleteConfirmMessage', { name: optionsHabit.name }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t('habits.cancel'), style: "cancel" },
         {
-          text: "Delete",
+          text: t('habits.deleteButton'),
           style: "destructive",
           onPress: () => {
             archiveHabit(optionsHabit.id);
@@ -651,7 +665,7 @@ export default function HabitsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.success} />
-        <Text style={styles.loadingText}>Loading habits...</Text>
+        <Text style={styles.loadingText}>{t('habits.loadingHabits')}</Text>
       </View>
     );
   }
@@ -680,9 +694,9 @@ export default function HabitsScreen() {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <View style={styles.headerTitles}>
-            <Text style={styles.title}>Daily Habits</Text>
+            <Text style={styles.title}>{t('habits.title')}</Text>
             <Text style={styles.subtitle}>
-              {completedCount} of {habits.length} completed
+              {t('habits.completedOf', { completed: completedCount, total: habits.length })}
             </Text>
           </View>
           {habits.length > 1 && (
@@ -690,7 +704,7 @@ export default function HabitsScreen() {
               style={styles.editButton}
               onPress={() => setEditMode(!editMode)}
             >
-              <Text style={styles.editButtonText}>{editMode ? 'Done' : 'Edit Order'}</Text>
+              <Text style={styles.editButtonText}>{editMode ? t('habits.done') : t('habits.editOrder')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -704,9 +718,9 @@ export default function HabitsScreen() {
 
         <TouchableOpacity onPress={() => setCalendarVisible(true)} style={styles.dateDisplay}>
           <Text style={styles.dateText}>
-            {isViewingToday ? 'Today' : formatDateHeader(viewingDate)}
+            {isViewingToday ? t('habits.todayLabel') : formatDateHeader(viewingDate)}
           </Text>
-          <Text style={styles.tapToOpenCalendar}>Tap to pick date</Text>
+          <Text style={styles.tapToOpenCalendar}>{t('habits.tapToPickDate')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -730,15 +744,15 @@ export default function HabitsScreen() {
 
       {!isViewingToday && (
         <View style={styles.pastDateBanner}>
-          <Text style={styles.pastDateText}>Viewing {formatDateHeader(viewingDate)}</Text>
+          <Text style={styles.pastDateText}>{t('habits.viewing', { date: formatDateHeader(viewingDate) })}</Text>
         </View>
       )}
 
       <ScrollView style={styles.habitsList} contentContainerStyle={styles.habitsContent} scrollEventThrottle={16} bounces={false} overScrollMode="never">
         {habits.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No habits yet</Text>
-            <Text style={styles.emptySubtext}>Tap the + button to create your first habit</Text>
+            <Text style={styles.emptyText}>{t('habits.noHabits')}</Text>
+            <Text style={styles.emptySubtext}>{t('habits.noHabitsHint')}</Text>
           </View>
         ) : (
           habits.map((habit, index) => {
@@ -810,7 +824,7 @@ export default function HabitsScreen() {
 
       {completedCount === habits.length && habits.length > 0 && (
         <View style={styles.completedBanner}>
-          <Text style={styles.completedText}>All habits completed! Great job!</Text>
+          <Text style={styles.completedText}>{t('habits.allCompleted')}</Text>
         </View>
       )}
 
@@ -843,33 +857,33 @@ export default function HabitsScreen() {
           onPress={() => setInfoVisible(false)}
         >
           <View style={styles.infoModalContent}>
-            <Text style={styles.infoModalTitle}>Tips</Text>
+            <Text style={styles.infoModalTitle}>{t('habits.tipsTitle')}</Text>
             <View style={styles.infoRow}>
               <Text style={styles.infoIcon}>→</Text>
-              <Text style={styles.infoText}>Swipe right on a habit to complete it</Text>
+              <Text style={styles.infoText}>{t('habits.tipSwipeRight')}</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoIcon}>↔</Text>
-              <Text style={styles.infoText}>For progress habits, swipe further for more. Flick to fill completely</Text>
+              <Text style={styles.infoText}>{t('habits.tipSwipeFurther')}</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoIcon}>⋯</Text>
-              <Text style={styles.infoText}>Long press a habit for options (reset, edit, delete)</Text>
+              <Text style={styles.infoText}>{t('habits.tipLongPress')}</Text>
             </View>
-            <Text style={styles.infoModalTitle}>Quit Habits</Text>
+            <Text style={styles.infoModalTitle}>{t('habits.quitHabitsTitle')}</Text>
             <View style={styles.infoRow}>
               <Text style={styles.infoIcon}>✓</Text>
-              <Text style={styles.infoText}>Quit habits start completed each day — you're succeeding by not doing it</Text>
+              <Text style={styles.infoText}>{t('habits.tipQuitStart')}</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoIcon}>✗</Text>
-              <Text style={styles.infoText}>Tap a quit habit to mark that you slipped up. Tap again to undo</Text>
+              <Text style={styles.infoText}>{t('habits.tipQuitTap')}</Text>
             </View>
             <TouchableOpacity
               style={styles.infoCloseButton}
               onPress={() => setInfoVisible(false)}
             >
-              <Text style={styles.infoCloseText}>Got it</Text>
+              <Text style={styles.infoCloseText}>{t('habits.gotIt')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -898,28 +912,28 @@ export default function HabitsScreen() {
               style={styles.optionItem}
               onPress={handleResetHabit}
             >
-              <Text style={styles.optionItemText}>Reset Progress For Today</Text>
+              <Text style={styles.optionItemText}>{t('habits.resetProgress')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.optionItem}
               onPress={handleEditHabit}
             >
-              <Text style={styles.optionItemText}>Edit Habit</Text>
+              <Text style={styles.optionItemText}>{t('habits.editHabit')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.optionItem}
               onPress={handleDeleteHabit}
             >
-              <Text style={styles.optionItemTextDanger}>Delete Habit</Text>
+              <Text style={styles.optionItemTextDanger}>{t('habits.deleteHabit')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.optionItemCancel}
               onPress={handleCloseOptions}
             >
-              <Text style={styles.optionItemText}>Cancel</Text>
+              <Text style={styles.optionItemText}>{t('habits.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -941,7 +955,7 @@ export default function HabitsScreen() {
               {selectedHabit?.icon} {selectedHabit?.name}
             </Text>
             <Text style={styles.progressModalSubtitle}>
-              Target: {selectedHabit?.target_value} {selectedHabit?.target_type === "minutes" ? "minutes" : ""}
+              {t('habits.target', { value: selectedHabit?.target_value, unit: selectedHabit?.target_type === "minutes" ? t('habits.minutes') : "" })}
             </Text>
 
             <View style={styles.progressInputRow}>
@@ -977,15 +991,15 @@ export default function HabitsScreen() {
             </View>
 
             <Text style={styles.progressUnitLabel}>
-              {selectedHabit?.target_type === "minutes" ? "minutes" : selectedHabit?.target_type === "hours" ? "hours" : "times"}
+              {selectedHabit?.target_type === "minutes" ? t('habits.minutes') : selectedHabit?.target_type === "hours" ? t('habits.hours') : t('habits.times')}
             </Text>
 
             <View style={styles.buttonRow}>
               <TouchableOpacity style={styles.cancelButton} onPress={handleProgressCancel}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>{t('habits.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveButton} onPress={handleProgressSave}>
-                <Text style={styles.saveButtonText}>Save</Text>
+                <Text style={styles.saveButtonText}>{t('habits.save')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1570,6 +1584,15 @@ function createStyles(colors: ThemeColors) {
     },
     habitItemDimmed: {
       opacity: 0.5,
+    },
+    habitItemFailed: {
+      opacity: 0.55,
+    },
+    habitTextFailed: {
+      color: colors.textTertiary,
+    },
+    habitProgressFailed: {
+      color: colors.danger,
     },
     habitTextDimmed: {
       color: colors.textTertiary,

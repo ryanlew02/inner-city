@@ -12,6 +12,7 @@ import {
 import { ThemeColors } from "../constants/Colors";
 import { useHabits } from "../context/HabitsContext";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { getEntriesForHabitInRange } from "../services/database/entryService";
 import {
   Habit,
@@ -219,12 +220,13 @@ function formatWeekLabel(monday: Date): string {
 // ─── Sub-components ───
 
 function TabBar({ activeTab, onTabChange, colors }: { activeTab: TabKey; onTabChange: (tab: TabKey) => void; colors: ThemeColors }) {
+  const { t: tTab } = useLanguage();
   const styles = createStyles(colors);
   const tabs: { key: TabKey; label: string }[] = [
-    { key: "overview", label: "Overview" },
-    { key: "weekly", label: "Weekly" },
-    { key: "monthly", label: "Monthly" },
-    { key: "yearly", label: "Yearly" },
+    { key: "overview", label: tTab("stats.overview") },
+    { key: "weekly", label: tTab("stats.weekly") },
+    { key: "monthly", label: tTab("stats.monthly") },
+    { key: "yearly", label: tTab("stats.yearly") },
   ];
   return (
     <View style={styles.tabBar}>
@@ -238,13 +240,14 @@ function TabBar({ activeTab, onTabChange, colors }: { activeTab: TabKey; onTabCh
 }
 
 function NavRow({ label, onPrev, onNext, nextDisabled, onLabelPress, colors }: { label: string; onPrev: () => void; onNext: () => void; nextDisabled: boolean; onLabelPress?: () => void; colors: ThemeColors }) {
+  const { t: tNav } = useLanguage();
   const styles = createStyles(colors);
   return (
     <View style={styles.navRow}>
       <TouchableOpacity onPress={onPrev} style={styles.navArrow}><Text style={styles.navArrowText}>{"\u25C0"}</Text></TouchableOpacity>
       <TouchableOpacity onPress={onLabelPress} disabled={!onLabelPress}>
         <Text style={styles.navLabel}>{label}</Text>
-        {onLabelPress && <Text style={styles.navLabelHint}>Tap to pick</Text>}
+        {onLabelPress && <Text style={styles.navLabelHint}>{tNav('stats.tapToPick')}</Text>}
       </TouchableOpacity>
       <TouchableOpacity onPress={onNext} disabled={nextDisabled} style={styles.navArrow}>
         <Text style={[styles.navArrowText, nextDisabled && styles.navArrowDisabled]}>{"\u25B6"}</Text>
@@ -512,6 +515,7 @@ function YearlyGrid({ habit, entriesByDate, todayStr, year, colors }: { habit: H
 }
 
 function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: Habit; entriesByDate: Map<string, HabitEntry>; todayStr: string; colors: ThemeColors }) {
+  const { t: tCard } = useLanguage();
   const styles = createStyles(colors);
   const scheduleData = parseScheduleJson(habit.schedule_json);
   const streaks = calcStreaks(habit, entriesByDate, todayStr);
@@ -525,7 +529,7 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
   const startOfYear = new Date(year, 0, 1);
   const iter = new Date(startOfYear);
   while (iter <= today) { const dateStr = formatDateStr(iter); if (isScheduledForDate(scheduleData, iter)) { const entry = entriesByDate.get(dateStr); if (isCompletedForDate(habit, entry, iter)) yearCompleted++; } iter.setDate(iter.getDate() + 1); }
-  const modeLabel = scheduleData.habit_mode === "quit" ? "Quit" : "Build";
+  const modeLabel = scheduleData.habit_mode === "quit" ? tCard("stats.quitMode") : tCard("stats.build");
   return (
     <View style={styles.habitCard}>
       <View style={styles.habitHeader}>
@@ -539,10 +543,10 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
         </View>
       </View>
       <View style={styles.statsRow}>
-        <StatBox label="Current Streak" value={String(streaks.current)} colors={colors} />
-        <StatBox label="Best Streak" value={String(streaks.best)} colors={colors} />
-        <StatBox label="This Month" value={`${monthCompleted}/${daysInMonth}`} colors={colors} />
-        <StatBox label="This Year" value={String(yearCompleted)} colors={colors} />
+        <StatBox label={tCard("stats.currentStreak")} value={String(streaks.current)} colors={colors} />
+        <StatBox label={tCard("stats.bestStreak")} value={String(streaks.best)} colors={colors} />
+        <StatBox label={tCard("stats.thisMonth")} value={`${monthCompleted}/${daysInMonth}`} colors={colors} />
+        <StatBox label={tCard("stats.thisYear")} value={String(yearCompleted)} colors={colors} />
       </View>
     </View>
   );
@@ -552,6 +556,7 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
 
 export default function StatsScreen() {
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const styles = createStyles(colors);
   const { habits, completedCount } = useHabits();
 
@@ -768,8 +773,8 @@ export default function StatsScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Stats</Text>
-        <Text style={styles.subtitle}>Your progress</Text>
+        <Text style={styles.title}>{t('stats.title')}</Text>
+        <Text style={styles.subtitle}>{t('stats.subtitle')}</Text>
       </View>
 
       {/* Tab bar */}
@@ -782,7 +787,7 @@ export default function StatsScreen() {
       ) : activeHabits.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>
-            No habits yet. Add some to see your stats!
+            {t('stats.noHabits')}
           </Text>
         </View>
       ) : (
@@ -796,21 +801,21 @@ export default function StatsScreen() {
                     <Text style={styles.summaryValue}>
                       {activeHabits.length}
                     </Text>
-                    <Text style={styles.summaryLabel}>Habits</Text>
+                    <Text style={styles.summaryLabel}>{t('stats.habitsLabel')}</Text>
                   </View>
                   <View style={styles.summaryDivider} />
                   <View style={styles.summaryItem}>
                     <Text style={styles.summaryValue}>
                       {completedCount}/{activeHabits.length}
                     </Text>
-                    <Text style={styles.summaryLabel}>Today ({todayRate}%)</Text>
+                    <Text style={styles.summaryLabel}>{t('stats.todayLabel', { percent: todayRate })}</Text>
                   </View>
                   <View style={styles.summaryDivider} />
                   <View style={styles.summaryItem}>
                     <Text style={styles.summaryValue}>
                       {overallCompletion}%
                     </Text>
-                    <Text style={styles.summaryLabel}>Overall</Text>
+                    <Text style={styles.summaryLabel}>{t('stats.overall')}</Text>
                   </View>
                 </View>
               </View>
@@ -952,7 +957,7 @@ export default function StatsScreen() {
                   <View key={habit.id} style={styles.habitCard}>
                     <HabitHeader habit={habit} colors={colors} />
                     <Text style={styles.completionText}>
-                      {stats.completed}/{stats.scheduled} completed ({stats.rate}%)
+                      {t('stats.completed', { completed: stats.completed, scheduled: stats.scheduled, rate: stats.rate })}
                     </Text>
                     <MonthlyGrid
                       habit={habit}
@@ -1004,7 +1009,7 @@ export default function StatsScreen() {
                   <View key={habit.id} style={styles.habitCard}>
                     <HabitHeader habit={habit} colors={colors} />
                     <Text style={styles.completionText}>
-                      {stats.completed}/{stats.scheduled} completed ({stats.rate}%)
+                      {t('stats.completed', { completed: stats.completed, scheduled: stats.scheduled, rate: stats.rate })}
                     </Text>
                     <YearlyGrid
                       habit={habit}

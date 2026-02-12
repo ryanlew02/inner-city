@@ -11,54 +11,33 @@ import {
   Alert,
   ActivityIndicator,
   Switch,
+  Share,
+  Platform,
 } from "react-native";
 import { useBuildings } from "../context/BuildingContext";
 import { useHabits } from "../context/HabitsContext";
 import { useTheme } from "../context/ThemeContext";
 import { useSound } from "../context/SoundContext";
+import { useLanguage, LANGUAGE_OPTIONS } from "../context/LanguageContext";
 import { ThemePreference } from "../services/database/themeService";
 import { ThemeColors } from "../constants/Colors";
 import { exportAllData, importAllData } from "../services/database/dataExportService";
 
-const THEME_OPTIONS: { value: ThemePreference; label: string; description: string }[] = [
-  { value: "system", label: "System", description: "Follow device setting" },
-  { value: "light", label: "Light", description: "Always light" },
-  { value: "dark", label: "Dark", description: "Always dark" },
-];
-
-const PREFERENCE_LABELS: Record<ThemePreference, string> = {
-  system: "System",
-  light: "Light",
-  dark: "Dark",
-};
-
 type ResetTarget = "city" | "habits" | null;
-
-const RESET_INFO: Record<"city" | "habits", { title: string; warning: string; buttonLabel: string }> = {
-  city: {
-    title: "Reset City",
-    warning: "This will permanently destroy all placed buildings. Your tokens will be kept. This action cannot be undone.",
-    buttonLabel: "Reset City",
-  },
-  habits: {
-    title: "Reset Habit Data",
-    warning: "This will permanently delete all habits and their history. Your city and tokens will be kept. This action cannot be undone.",
-    buttonLabel: "Reset Habit Data",
-  },
-};
 
 export default function SettingsScreen() {
   const { resetCity } = useBuildings();
   const { resetHabitData } = useHabits();
   const { colors, preference, setPreference } = useTheme();
   const { soundEnabled, setSoundEnabled } = useSound();
+  const { t, language, setLanguage } = useLanguage();
 
   const [appearanceVisible, setAppearanceVisible] = useState(false);
+  const [languageVisible, setLanguageVisible] = useState(false);
   const [resetPickerVisible, setResetPickerVisible] = useState(false);
   const [resetTarget, setResetTarget] = useState<ResetTarget>(null);
   const [privacyVisible, setPrivacyVisible] = useState(false);
   const [confirmText, setConfirmText] = useState("");
-  const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
 
   const handleResetConfirm = async () => {
@@ -77,33 +56,30 @@ export default function SettingsScreen() {
   };
 
   const handleExport = async () => {
-    setExporting(true);
     try {
       await exportAllData();
     } catch (e: any) {
-      Alert.alert("Export Failed", e.message || "An error occurred while exporting.");
-    } finally {
-      setExporting(false);
+      Alert.alert(t('settings.exportFailed'), e.message || "An error occurred while exporting.");
     }
   };
 
   const handleImport = () => {
     Alert.alert(
-      "Import Data",
-      "This will replace all existing data with the backup. Are you sure?",
+      t('settings.importConfirmTitle'),
+      t('settings.importConfirmMessage'),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t('settings.cancelButton'), style: "cancel" },
         {
-          text: "Import",
+          text: t('settings.importButton'),
           style: "destructive",
           onPress: async () => {
             setImporting(true);
             try {
               await importAllData();
-              Alert.alert("Success", "Your data has been restored. Please close and restart the app for changes to take effect.");
+              Alert.alert(t('settings.importSuccess'), t('settings.importSuccessMessage'));
             } catch (e: any) {
               if (e.message !== "cancelled") {
-                Alert.alert("Import Failed", e.message || "An error occurred while importing.");
+                Alert.alert(t('settings.importFailed'), e.message || "An error occurred while importing.");
               }
             } finally {
               setImporting(false);
@@ -114,13 +90,29 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleRate = () => {
+    const storeUrl = Platform.select({
+      ios: "https://apps.apple.com/app/id_PLACEHOLDER",
+      android: "https://play.google.com/store/apps/details?id=com.anonymous.habitcitynew",
+    });
+    if (storeUrl) Linking.openURL(storeUrl);
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: t('settings.shareMessage'),
+      });
+    } catch (_) {}
+  };
+
   const styles = createStyles(colors);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Menu Rows */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>General</Text>
+        <Text style={styles.sectionTitle}>{t('settings.general')}</Text>
         <View style={styles.menuGroup}>
           <TouchableOpacity
             style={styles.menuRow}
@@ -128,16 +120,28 @@ export default function SettingsScreen() {
             onPress={() => setAppearanceVisible(true)}
           >
             <View style={styles.menuRowLeft}>
-              <Text style={styles.menuRowLabel}>App Appearance</Text>
-              <Text style={styles.menuRowSubtitle}>{PREFERENCE_LABELS[preference]}</Text>
+              <Text style={styles.menuRowLabel}>{t('settings.appAppearance')}</Text>
+              <Text style={styles.menuRowSubtitle}>{t(`settings.${preference}`)}</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.6}
+            onPress={() => setLanguageVisible(true)}
+          >
+            <View style={styles.menuRowLeft}>
+              <Text style={styles.menuRowLabel}>{t('settings.language')}</Text>
+              <Text style={styles.menuRowSubtitle}>{LANGUAGE_OPTIONS.find(l => l.code === language)?.nativeLabel || 'English'}</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
 
           <View style={styles.menuRow}>
             <View style={styles.menuRowLeft}>
-              <Text style={styles.menuRowLabel}>Sounds</Text>
-              <Text style={styles.menuRowSubtitle}>{soundEnabled ? "On" : "Off"}</Text>
+              <Text style={styles.menuRowLabel}>{t('settings.sounds')}</Text>
+              <Text style={styles.menuRowSubtitle}>{soundEnabled ? t('settings.on') : t('settings.off')}</Text>
             </View>
             <Switch
               value={soundEnabled}
@@ -153,8 +157,8 @@ export default function SettingsScreen() {
             onPress={() => setResetPickerVisible(true)}
           >
             <View style={styles.menuRowLeft}>
-              <Text style={styles.menuRowLabelDanger}>Reset Data</Text>
-              <Text style={styles.menuRowSubtitle}>Reset city or habit data</Text>
+              <Text style={styles.menuRowLabelDanger}>{t('settings.resetData')}</Text>
+              <Text style={styles.menuRowSubtitle}>{t('settings.resetDataSubtitle')}</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
@@ -162,34 +166,30 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Data</Text>
+        <Text style={styles.sectionTitle}>{t('settings.data')}</Text>
         <View style={styles.menuGroup}>
           <TouchableOpacity
             style={styles.menuRow}
             activeOpacity={0.6}
             onPress={handleExport}
-            disabled={exporting || importing}
+            disabled={importing}
           >
             <View style={styles.menuRowLeft}>
-              <Text style={styles.menuRowLabel}>Export Data</Text>
-              <Text style={styles.menuRowSubtitle}>Save a backup of all your data</Text>
+              <Text style={styles.menuRowLabel}>{t('settings.exportData')}</Text>
+              <Text style={styles.menuRowSubtitle}>{t('settings.exportDataSubtitle')}</Text>
             </View>
-            {exporting ? (
-              <ActivityIndicator size="small" color={colors.textTertiary} />
-            ) : (
-              <Text style={styles.chevron}>›</Text>
-            )}
+            <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.menuRow, styles.menuRowLast]}
             activeOpacity={0.6}
             onPress={handleImport}
-            disabled={exporting || importing}
+            disabled={importing}
           >
             <View style={styles.menuRowLeft}>
-              <Text style={styles.menuRowLabel}>Import Data</Text>
-              <Text style={styles.menuRowSubtitle}>Restore from a backup file</Text>
+              <Text style={styles.menuRowLabel}>{t('settings.importData')}</Text>
+              <Text style={styles.menuRowSubtitle}>{t('settings.importDataSubtitle')}</Text>
             </View>
             {importing ? (
               <ActivityIndicator size="small" color={colors.textTertiary} />
@@ -201,10 +201,10 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
+        <Text style={styles.sectionTitle}>{t('settings.about')}</Text>
         <View style={styles.menuGroup}>
           <View style={styles.menuRow}>
-            <Text style={styles.infoLabel}>Version</Text>
+            <Text style={styles.infoLabel}>{t('settings.version')}</Text>
             <Text style={styles.infoValue}>1.0.0</Text>
           </View>
           <TouchableOpacity
@@ -213,7 +213,29 @@ export default function SettingsScreen() {
             onPress={() => setPrivacyVisible(true)}
           >
             <View style={styles.menuRowLeft}>
-              <Text style={styles.menuRowLabel}>Privacy Policy</Text>
+              <Text style={styles.menuRowLabel}>{t('settings.privacyPolicy')}</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.6}
+            onPress={handleRate}
+          >
+            <View style={styles.menuRowLeft}>
+              <Text style={styles.menuRowLabel}>{t('settings.rateApp')}</Text>
+              <Text style={styles.menuRowSubtitle}>{t('settings.rateAppSubtitle')}</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.6}
+            onPress={handleShare}
+          >
+            <View style={styles.menuRowLeft}>
+              <Text style={styles.menuRowLabel}>{t('settings.shareApp')}</Text>
+              <Text style={styles.menuRowSubtitle}>{t('settings.shareAppSubtitle')}</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
@@ -223,7 +245,7 @@ export default function SettingsScreen() {
             onPress={() => Linking.openURL("mailto:innercity.habit@gmail.com")}
           >
             <View style={styles.menuRowLeft}>
-              <Text style={styles.menuRowLabel}>Contact Us</Text>
+              <Text style={styles.menuRowLabel}>{t('settings.contactUs')}</Text>
               <Text style={styles.menuRowSubtitle}>innercity.habit@gmail.com</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
@@ -241,21 +263,25 @@ export default function SettingsScreen() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setAppearanceVisible(false)}>
-              <Text style={styles.modalClose}>Done</Text>
+              <Text style={styles.modalClose}>{t('settings.doneButton')}</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>App Appearance</Text>
+            <Text style={styles.modalTitle}>{t('settings.appAppearance')}</Text>
             <View style={styles.modalHeaderSpacer} />
           </View>
 
           <View style={styles.modalContent}>
             <View style={styles.themeOptions}>
-              {THEME_OPTIONS.map((option, i) => (
+              {([
+                { value: "system" as ThemePreference, labelKey: "settings.system", descKey: "settings.systemDesc" },
+                { value: "light" as ThemePreference, labelKey: "settings.light", descKey: "settings.lightDesc" },
+                { value: "dark" as ThemePreference, labelKey: "settings.dark", descKey: "settings.darkDesc" },
+              ]).map((option, i) => (
                 <TouchableOpacity
                   key={option.value}
                   style={[
                     styles.themeOption,
                     preference === option.value && styles.themeOptionSelected,
-                    i === THEME_OPTIONS.length - 1 && styles.themeOptionLast,
+                    i === 2 && styles.themeOptionLast,
                   ]}
                   onPress={() => setPreference(option.value)}
                   activeOpacity={0.7}
@@ -266,8 +292,8 @@ export default function SettingsScreen() {
                     )}
                   </View>
                   <View style={styles.themeOptionText}>
-                    <Text style={styles.themeOptionLabel}>{option.label}</Text>
-                    <Text style={styles.themeOptionDescription}>{option.description}</Text>
+                    <Text style={styles.themeOptionLabel}>{t(option.labelKey)}</Text>
+                    <Text style={styles.themeOptionDescription}>{t(option.descKey)}</Text>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -286,9 +312,9 @@ export default function SettingsScreen() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setResetPickerVisible(false)}>
-              <Text style={styles.modalClose}>Cancel</Text>
+              <Text style={styles.modalClose}>{t('settings.cancelButton')}</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Reset Data</Text>
+            <Text style={styles.modalTitle}>{t('settings.resetData')}</Text>
             <View style={styles.modalHeaderSpacer} />
           </View>
 
@@ -303,8 +329,8 @@ export default function SettingsScreen() {
                 }}
               >
                 <View style={styles.menuRowLeft}>
-                  <Text style={styles.menuRowLabelDanger}>Reset City</Text>
-                  <Text style={styles.menuRowSubtitle}>Remove all placed buildings</Text>
+                  <Text style={styles.menuRowLabelDanger}>{t('settings.resetCity')}</Text>
+                  <Text style={styles.menuRowSubtitle}>{t('settings.resetCitySubtitle')}</Text>
                 </View>
                 <Text style={styles.chevron}>›</Text>
               </TouchableOpacity>
@@ -318,8 +344,8 @@ export default function SettingsScreen() {
                 }}
               >
                 <View style={styles.menuRowLeft}>
-                  <Text style={styles.menuRowLabelDanger}>Reset Habit Data</Text>
-                  <Text style={styles.menuRowSubtitle}>Delete all habits and history</Text>
+                  <Text style={styles.menuRowLabelDanger}>{t('settings.resetHabitData')}</Text>
+                  <Text style={styles.menuRowSubtitle}>{t('settings.resetHabitDataSubtitle')}</Text>
                 </View>
                 <Text style={styles.chevron}>›</Text>
               </TouchableOpacity>
@@ -339,25 +365,25 @@ export default function SettingsScreen() {
           <SafeAreaView style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={handleResetClose}>
-                <Text style={styles.modalClose}>Cancel</Text>
+                <Text style={styles.modalClose}>{t('settings.cancelButton')}</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>{RESET_INFO[resetTarget].title}</Text>
+              <Text style={styles.modalTitle}>{resetTarget === "city" ? t('settings.resetCity') : t('settings.resetHabitData')}</Text>
               <View style={styles.modalHeaderSpacer} />
             </View>
 
             <View style={styles.modalContent}>
               <View style={styles.warningBox}>
                 <Text style={styles.warningText}>
-                  {RESET_INFO[resetTarget].warning}
+                  {resetTarget === "city" ? t('settings.resetCityWarning') : t('settings.resetHabitDataWarning')}
                 </Text>
               </View>
 
-              <Text style={styles.confirmLabel}>Type "confirm" to proceed</Text>
+              <Text style={styles.confirmLabel}>{t('settings.typeConfirm')}</Text>
               <TextInput
                 style={styles.confirmInput}
                 value={confirmText}
                 onChangeText={setConfirmText}
-                placeholder="confirm"
+                placeholder={t('settings.confirmPlaceholder')}
                 placeholderTextColor={colors.textTertiary}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -378,7 +404,7 @@ export default function SettingsScreen() {
                     confirmText.toLowerCase() !== "confirm" && styles.resetButtonTextDisabled,
                   ]}
                 >
-                  {RESET_INFO[resetTarget].buttonLabel}
+                  {resetTarget === "city" ? t('settings.resetCity') : t('settings.resetHabitData')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -395,9 +421,9 @@ export default function SettingsScreen() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setPrivacyVisible(false)}>
-              <Text style={styles.modalClose}>Done</Text>
+              <Text style={styles.modalClose}>{t('settings.doneButton')}</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Privacy Policy</Text>
+            <Text style={styles.modalTitle}>{t('settings.privacyPolicy')}</Text>
             <View style={styles.modalHeaderSpacer} />
           </View>
 
@@ -450,6 +476,51 @@ export default function SettingsScreen() {
             <Text style={styles.policyBody}>Developer: Ryan Lewandowski</Text>
             <Text style={styles.policyBody}>Location: United States</Text>
           </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Language Picker Modal */}
+      <Modal
+        visible={languageVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setLanguageVisible(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setLanguageVisible(false)}>
+              <Text style={styles.modalClose}>{t('settings.doneButton')}</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{t('settings.language')}</Text>
+            <View style={styles.modalHeaderSpacer} />
+          </View>
+
+          <View style={styles.modalContent}>
+            <View style={styles.themeOptions}>
+              {LANGUAGE_OPTIONS.map((option, i) => (
+                <TouchableOpacity
+                  key={option.code}
+                  style={[
+                    styles.themeOption,
+                    language === option.code && styles.themeOptionSelected,
+                    i === LANGUAGE_OPTIONS.length - 1 && styles.themeOptionLast,
+                  ]}
+                  onPress={() => setLanguage(option.code)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.themeOptionRadio}>
+                    {language === option.code && (
+                      <View style={styles.themeOptionRadioInner} />
+                    )}
+                  </View>
+                  <View style={styles.themeOptionText}>
+                    <Text style={styles.themeOptionLabel}>{option.nativeLabel}</Text>
+                    <Text style={styles.themeOptionDescription}>{option.label}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </SafeAreaView>
       </Modal>
     </ScrollView>

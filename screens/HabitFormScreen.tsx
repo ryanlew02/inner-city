@@ -12,6 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useHabits } from "../context/HabitsContext";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { ThemeColors } from "../constants/Colors";
 import { parseScheduleJson, ScheduleData } from "../types/habit";
 import ColorPickerSimple from "../components/ColorPickerSimple";
@@ -81,6 +82,7 @@ export default function HabitFormScreen() {
   const params = useLocalSearchParams<{ habitId?: string }>();
   const { habits, addHabit, updateHabit } = useHabits();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const styles = createStyles(colors);
 
   const editingHabitId = params.habitId || null;
@@ -159,7 +161,7 @@ export default function HabitFormScreen() {
     if (form.target_type !== "check") {
       const num = parseInt(form.target_value);
       if (!form.target_value.trim() || isNaN(num) || num < 1) {
-        newErrors.targetValue = "Please enter a valid number (1 or greater)";
+        newErrors.targetValue = t('habitForm.targetError');
       }
     }
 
@@ -234,27 +236,27 @@ export default function HabitFormScreen() {
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <Text style={styles.label}>Name *</Text>
+        <Text style={styles.label}>{t('habitForm.nameLabel')}</Text>
         <TextInput
           style={styles.input}
           value={form.name}
           onChangeText={(text) => setForm({ ...form, name: text })}
-          placeholder="e.g., Morning Exercise"
+          placeholder={t('habitForm.namePlaceholder')}
           placeholderTextColor={colors.textTertiary}
         />
 
-        <Text style={styles.label}>Description</Text>
+        <Text style={styles.label}>{t('habitForm.descriptionLabel')}</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
           value={form.description}
           onChangeText={(text) => setForm({ ...form, description: text })}
-          placeholder="Optional description"
+          placeholder={t('habitForm.descriptionPlaceholder')}
           placeholderTextColor={colors.textTertiary}
           multiline
           numberOfLines={2}
         />
 
-        <Text style={styles.label}>Habit Mode</Text>
+        <Text style={styles.label}>{t('habitForm.habitMode')}</Text>
         <View style={styles.pickerRow}>
           {(["build", "quit"] as const).map((mode) => (
             <TouchableOpacity
@@ -271,18 +273,18 @@ export default function HabitFormScreen() {
                   form.habit_mode === mode && styles.pickerOptionTextSelected,
                 ]}
               >
-                {mode === "build" ? "Build" : "Quit"}
+                {mode === "build" ? t('habitForm.build') : t('habitForm.quitMode')}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
         <Text style={styles.modeHint}>
           {form.habit_mode === "build"
-            ? "Build: Work toward completing a goal"
-            : "Quit: Track avoidance or staying under a limit"}
+            ? t('habitForm.buildHint')
+            : t('habitForm.quitHint')}
         </Text>
 
-        <Text style={styles.label}>Target Type</Text>
+        <Text style={styles.label}>{t('habitForm.targetType')}</Text>
         <View style={styles.pickerRow}>
           {(["check", "count", "minutes", "hours"] as const).map((type) => (
             <TouchableOpacity
@@ -299,7 +301,7 @@ export default function HabitFormScreen() {
                   form.target_type === type && styles.pickerOptionTextSelected,
                 ]}
               >
-                {type.charAt(0).toUpperCase() + type.slice(1)}
+                {type === "check" ? t('habitForm.check') : type === "count" ? t('habitForm.count') : type === "minutes" ? t('habitForm.minutesType') : t('habitForm.hoursType')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -308,8 +310,8 @@ export default function HabitFormScreen() {
         {form.target_type !== "check" && (
           <>
             <Text style={styles.label}>
-              {form.habit_mode === "quit" ? "Maximum " : "Target "}
-              {form.target_type === "minutes" ? "(minutes)" : form.target_type === "hours" ? "(hours)" : "(count)"} *
+              {form.habit_mode === "quit" ? t('habitForm.maximumLabel') : t('habitForm.targetLabel')}{" "}
+              {form.target_type === "minutes" ? t('habitForm.minutesUnit') : form.target_type === "hours" ? t('habitForm.hoursUnit') : t('habitForm.countUnit')} *
             </Text>
             <TextInput
               style={[styles.input, errors.targetValue && styles.inputError]}
@@ -322,16 +324,16 @@ export default function HabitFormScreen() {
                 }
               }}
               keyboardType="numeric"
-              placeholder={form.habit_mode === "quit" ? "e.g., 2 (max hours)" : "e.g., 30"}
+              placeholder={form.habit_mode === "quit" ? t('habitForm.maxPlaceholder') : t('habitForm.targetPlaceholder')}
               placeholderTextColor={colors.textTertiary}
             />
             {errors.targetValue && (
-              <Text style={styles.errorText}>{errors.targetValue}</Text>
+              <Text style={styles.errorText}>{t('habitForm.targetError')}</Text>
             )}
           </>
         )}
 
-        <Text style={styles.label}>Color</Text>
+        <Text style={styles.label}>{t('habitForm.colorLabel')}</Text>
         <TouchableOpacity
           style={styles.colorPreviewButton}
           onPress={() => {
@@ -342,13 +344,13 @@ export default function HabitFormScreen() {
         >
           <View style={[styles.colorPreviewSwatch, { backgroundColor: form.color }]} />
           <View style={styles.colorPreviewInfo}>
-            <Text style={styles.colorPreviewText}>Tap to change color</Text>
+            <Text style={styles.colorPreviewText}>{t('habitForm.tapToChangeColor')}</Text>
             <Text style={styles.colorPreviewHex}>{form.color}</Text>
           </View>
           <Text style={styles.colorPreviewArrow}>›</Text>
         </TouchableOpacity>
 
-        <Text style={styles.label}>Icon</Text>
+        <Text style={styles.label}>{t('habitForm.iconLabel')}</Text>
         <View style={styles.iconRow}>
           {SUGGESTED_ICONS.map((icon) => (
             <TouchableOpacity
@@ -367,11 +369,11 @@ export default function HabitFormScreen() {
           style={styles.input}
           value={form.icon}
           onChangeText={(text) => setForm({ ...form, icon: text })}
-          placeholder="Or type custom emoji"
+          placeholder={t('habitForm.orTypeCustomEmoji')}
           placeholderTextColor={colors.textTertiary}
         />
 
-        <Text style={styles.label}>Schedule</Text>
+        <Text style={styles.label}>{t('habitForm.scheduleLabel')}</Text>
         <TouchableOpacity
           style={styles.schedulePreviewButton}
           onPress={() => setScheduleModalVisible(true)}
@@ -382,30 +384,32 @@ export default function HabitFormScreen() {
           </View>
           <View style={styles.schedulePreviewInfo}>
             <Text style={styles.schedulePreviewTitle}>
-              {form.schedule_type === "daily" && "Every Day"}
+              {form.schedule_type === "daily" && t('habitForm.everyDay')}
               {form.schedule_type === "specific_days" && (
                 form.specific_days.length > 0
                   ? form.specific_days.sort((a, b) => a - b).map(d => DAY_LABELS[d]).join(", ")
-                  : "Select days of the week"
+                  : t('habitForm.selectDays')
               )}
-              {form.schedule_type === "times_per_week" && `${form.times_per_week || "X"} times per week`}
+              {form.schedule_type === "times_per_week" && t('habitForm.timesPerWeekPlaceholder', { count: form.times_per_week || "X" })}
               {form.schedule_type === "days_of_month" && (
                 form.days_of_month.length > 0
-                  ? `${form.days_of_month.length} day${form.days_of_month.length > 1 ? "s" : ""} per month`
-                  : "Select days of the month"
+                  ? (form.days_of_month.length > 1
+                      ? t('habitForm.daysPerMonthPlural', { count: form.days_of_month.length })
+                      : t('habitForm.daysPerMonth', { count: form.days_of_month.length }))
+                  : t('habitForm.selectDaysOfMonth').split(':')[0]
               )}
             </Text>
-            <Text style={styles.schedulePreviewSubtitle}>Tap to change schedule</Text>
+            <Text style={styles.schedulePreviewSubtitle}>{t('habitForm.tapToChangeSchedule')}</Text>
           </View>
           <Text style={styles.schedulePreviewArrow}>›</Text>
         </TouchableOpacity>
 
-        <Text style={styles.label}>Reminder Notifications</Text>
+        <Text style={styles.label}>{t('habitForm.reminderLabel')}</Text>
         <View style={styles.notificationToggleRow}>
           <View style={styles.notificationToggleInfo}>
-            <Text style={styles.notificationToggleLabel}>Enable Reminders</Text>
+            <Text style={styles.notificationToggleLabel}>{t('habitForm.enableReminders')}</Text>
             <Text style={styles.notificationToggleDesc}>
-              Get notified on scheduled days
+              {t('habitForm.enableRemindersDesc')}
             </Text>
           </View>
           <Switch
@@ -424,7 +428,7 @@ export default function HabitFormScreen() {
 
         {form.notification_enabled && (
           <View style={styles.notificationSettings}>
-            <Text style={styles.notificationSettingsLabel}>Hour</Text>
+            <Text style={styles.notificationSettingsLabel}>{t('habitForm.hourLabel')}</Text>
             <View style={styles.hourGrid}>
               {HOURS.map((h) => (
                 <TouchableOpacity
@@ -447,7 +451,7 @@ export default function HabitFormScreen() {
               ))}
             </View>
 
-            <Text style={[styles.notificationSettingsLabel, { marginTop: 4 }]}>Minute & Period</Text>
+            <Text style={[styles.notificationSettingsLabel, { marginTop: 4 }]}>{t('habitForm.minuteAndPeriod')}</Text>
             <View style={styles.minuteAmpmRow}>
               {MINUTES.map((m) => (
                 <TouchableOpacity
@@ -493,12 +497,12 @@ export default function HabitFormScreen() {
               {form.notification_hour}:{form.notification_minute.toString().padStart(2, '0')} {form.notification_ampm}
             </Text>
 
-            <Text style={styles.notificationSettingsLabel}>Custom Message (optional)</Text>
+            <Text style={styles.notificationSettingsLabel}>{t('habitForm.customMessage')}</Text>
             <TextInput
               style={styles.input}
               value={form.notification_message}
               onChangeText={(text) => setForm({ ...form, notification_message: text })}
-              placeholder={`Don't forget about your ${form.name || 'habit'} habit`}
+              placeholder={t('habitForm.customMessagePlaceholder', { name: form.name || 'habit' })}
               placeholderTextColor={colors.textTertiary}
             />
           </View>
@@ -506,7 +510,7 @@ export default function HabitFormScreen() {
 
         <View style={styles.buttonRow}>
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Text style={styles.cancelButtonText}>{t('habitForm.cancelButton')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
@@ -517,7 +521,7 @@ export default function HabitFormScreen() {
             onPress={handleSave}
             disabled={!form.name.trim()}
           >
-            <Text style={styles.saveButtonText}>{isEditing ? "Update" : "Save"}</Text>
+            <Text style={styles.saveButtonText}>{isEditing ? t('habitForm.updateButton') : t('habitForm.saveButton')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -535,7 +539,7 @@ export default function HabitFormScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Color</Text>
+              <Text style={styles.modalTitle}>{t('habitForm.chooseColor')}</Text>
               <TouchableOpacity
                 style={[styles.modalClose, { backgroundColor: form.color }]}
                 onPress={() => {
@@ -543,7 +547,7 @@ export default function HabitFormScreen() {
                   setShowCustomColorPicker(false);
                 }}
               >
-                <Text style={styles.modalCloseText}>Done</Text>
+                <Text style={styles.modalCloseText}>{t('habitForm.doneButton')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -552,7 +556,7 @@ export default function HabitFormScreen() {
                 <Text style={styles.colorModalPreviewText}>{form.color}</Text>
               </View>
 
-              <Text style={styles.sectionTitle}>Preset Colors</Text>
+              <Text style={styles.sectionTitle}>{t('habitForm.presetColors')}</Text>
               <View style={styles.colorGrid}>
                 {PRESET_COLORS.map((color) => (
                   <TouchableOpacity
@@ -576,7 +580,7 @@ export default function HabitFormScreen() {
                 onPress={() => setShowCustomColorPicker(!showCustomColorPicker)}
               >
                 <Text style={styles.customColorToggleText}>
-                  {showCustomColorPicker ? "Hide Custom Color Picker" : "Create Custom Color"}
+                  {showCustomColorPicker ? t('habitForm.hideCustom') : t('habitForm.createCustom')}
                 </Text>
                 <Text style={styles.customColorToggleArrow}>
                   {showCustomColorPicker ? "▲" : "▼"}
@@ -630,12 +634,12 @@ export default function HabitFormScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Schedule</Text>
+              <Text style={styles.modalTitle}>{t('habitForm.scheduleTitle')}</Text>
               <TouchableOpacity
                 style={[styles.modalClose, { backgroundColor: form.color }]}
                 onPress={() => setScheduleModalVisible(false)}
               >
-                <Text style={styles.modalCloseText}>Done</Text>
+                <Text style={styles.modalCloseText}>{t('habitForm.doneButton')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -652,8 +656,8 @@ export default function HabitFormScreen() {
                   <View style={styles.scheduleOptionLeft}>
                     <Text style={styles.scheduleOptionEmoji}>📅</Text>
                     <View>
-                      <Text style={styles.scheduleOptionTitle}>Every Day</Text>
-                      <Text style={styles.scheduleOptionDesc}>Repeat daily without exception</Text>
+                      <Text style={styles.scheduleOptionTitle}>{t('habitForm.everyDay')}</Text>
+                      <Text style={styles.scheduleOptionDesc}>{t('habitForm.everyDayDesc')}</Text>
                     </View>
                   </View>
                   {form.schedule_type === "daily" && (
@@ -674,8 +678,8 @@ export default function HabitFormScreen() {
                   <View style={styles.scheduleOptionLeft}>
                     <Text style={styles.scheduleOptionEmoji}>🗓️</Text>
                     <View>
-                      <Text style={styles.scheduleOptionTitle}>Specific Days of Week</Text>
-                      <Text style={styles.scheduleOptionDesc}>Choose which days (Mon, Wed, Fri...)</Text>
+                      <Text style={styles.scheduleOptionTitle}>{t('habitForm.specificDays')}</Text>
+                      <Text style={styles.scheduleOptionDesc}>{t('habitForm.specificDaysDesc')}</Text>
                     </View>
                   </View>
                   {form.schedule_type === "specific_days" && (
@@ -725,8 +729,8 @@ export default function HabitFormScreen() {
                   <View style={styles.scheduleOptionLeft}>
                     <Text style={styles.scheduleOptionEmoji}>🔢</Text>
                     <View>
-                      <Text style={styles.scheduleOptionTitle}>X Times Per Week</Text>
-                      <Text style={styles.scheduleOptionDesc}>Flexible - complete any days you choose</Text>
+                      <Text style={styles.scheduleOptionTitle}>{t('habitForm.timesPerWeek')}</Text>
+                      <Text style={styles.scheduleOptionDesc}>{t('habitForm.timesPerWeekDesc')}</Text>
                     </View>
                   </View>
                   {form.schedule_type === "times_per_week" && (
@@ -738,7 +742,7 @@ export default function HabitFormScreen() {
 
                 {form.schedule_type === "times_per_week" && (
                   <View style={styles.timesPerWeekContainer}>
-                    <Text style={styles.timesPerWeekLabel}>How many times per week?</Text>
+                    <Text style={styles.timesPerWeekLabel}>{t('habitForm.howManyTimes')}</Text>
                     <View style={styles.timesPerWeekRow}>
                       {[1, 2, 3, 4, 5, 6, 7].map((num) => (
                         <TouchableOpacity
@@ -774,8 +778,8 @@ export default function HabitFormScreen() {
                   <View style={styles.scheduleOptionLeft}>
                     <Text style={styles.scheduleOptionEmoji}>📆</Text>
                     <View>
-                      <Text style={styles.scheduleOptionTitle}>Specific Days of Month</Text>
-                      <Text style={styles.scheduleOptionDesc}>Choose dates (1st, 15th, 30th...)</Text>
+                      <Text style={styles.scheduleOptionTitle}>{t('habitForm.daysOfMonth')}</Text>
+                      <Text style={styles.scheduleOptionDesc}>{t('habitForm.daysOfMonthDesc')}</Text>
                     </View>
                   </View>
                   {form.schedule_type === "days_of_month" && (
@@ -787,7 +791,7 @@ export default function HabitFormScreen() {
 
                 {form.schedule_type === "days_of_month" && (
                   <View style={styles.monthDaysContainer}>
-                    <Text style={styles.monthDaysLabel}>Select days of the month:</Text>
+                    <Text style={styles.monthDaysLabel}>{t('habitForm.selectDaysOfMonth')}</Text>
                     <View style={styles.monthDaysGrid}>
                       {MONTH_DAYS.map((day) => (
                         <TouchableOpacity
@@ -816,7 +820,7 @@ export default function HabitFormScreen() {
                     </View>
                     {form.days_of_month.length > 0 && (
                       <Text style={styles.monthDaysHint}>
-                        Selected: {form.days_of_month.sort((a, b) => a - b).join(", ")}
+                        {t('habitForm.selected', { days: form.days_of_month.sort((a, b) => a - b).join(", ") })}
                       </Text>
                     )}
                   </View>

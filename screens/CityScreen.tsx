@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useCallback, useRef, useState, memo } from "react";
-import { Image, ImageSourcePropType, Text, TouchableOpacity, View } from "react-native";
+import { Image, ImageSourcePropType, Modal, Text, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withDecay } from "react-native-reanimated";
 import BuildingSheet from "../components/BuildingSheet";
 import { BuildingType, PlacedBuilding, PURCHASABLE_BUILDING_TYPES, useBuildings } from "../context/BuildingContext";
 import { useHabits } from "../context/HabitsContext";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { ThemeColors } from "../constants/Colors";
 
 // Isometric tile dimensions
@@ -572,6 +573,7 @@ const MAX_SCALE = 2.0;
 
 export default function CityScreen() {
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const { habits, completedCount, setOnTokenEarned } = useHabits();
   const {
     buildings,
@@ -586,6 +588,7 @@ export default function CityScreen() {
 
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [infoVisible, setInfoVisible] = useState(false);
   const [sheetMode, setSheetMode] = useState<"build" | "upgrade" | "autobuild">("build");
   const [selectedPlot, setSelectedPlot] = useState<{ row: number; col: number } | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<PlacedBuilding | undefined>(undefined);
@@ -862,8 +865,8 @@ export default function CityScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.title}>Inner City</Text>
-            <Text style={styles.subtitle}>Build your city, one habit at a time</Text>
+            <Text style={styles.title}>{t('city.title')}</Text>
+            <Text style={styles.subtitle}>{t('city.subtitle')}</Text>
           </View>
           <View style={styles.tokenDisplay}>
             <Image source={require("../assets/images/build_coin.png")} style={styles.tokenIconImage} />
@@ -900,30 +903,89 @@ export default function CityScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{buildingCount}</Text>
-            <Text style={styles.statLabel}>Built</Text>
+            <Text style={styles.statLabel}>{t('city.built')}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{completedCount}</Text>
-            <Text style={styles.statLabel}>Today</Text>
+            <Text style={styles.statLabel}>{t('city.today')}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{habits.length}</Text>
-            <Text style={styles.statLabel}>Habits</Text>
+            <Text style={styles.statLabel}>{t('city.habits')}</Text>
           </View>
         </View>
 
         <TouchableOpacity style={styles.autoBuildButton} onPress={handleAutoBuild}>
-          <Text style={styles.autoBuildButtonText}>+ Auto Build</Text>
+          <Text style={styles.autoBuildButtonText}>{t('city.autoBuild')}</Text>
         </TouchableOpacity>
 
         <Text style={styles.messageText}>
           {buildingCount === 0
-            ? "Tap an empty plot or use Auto Build to start!"
+            ? t('city.emptyMessage')
             : buildingCount >= maxPlots - 2
-            ? "Your city is thriving! Keep building to expand!"
-            : `Tap plots to build, tap buildings to upgrade`}
+            ? t('city.thrivingMessage')
+            : t('city.defaultMessage')}
         </Text>
       </View>
+
+      <TouchableOpacity
+        style={styles.infoButton}
+        onPress={() => setInfoVisible(true)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.infoButtonText}>i</Text>
+      </TouchableOpacity>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={infoVisible}
+        onRequestClose={() => setInfoVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.infoModalOverlay}
+          activeOpacity={1}
+          onPress={() => setInfoVisible(false)}
+        >
+          <View style={styles.infoModalContent}>
+            <Text style={styles.infoModalTitle}>{t('city.tipsTitle')}</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>tap</Text>
+              <Text style={styles.infoText}>{t('city.tipTapEmpty')}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>tap</Text>
+              <Text style={styles.infoText}>{t('city.tipTapExisting')}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>pinch</Text>
+              <Text style={styles.infoText}>{t('city.tipPinch')}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>drag</Text>
+              <Text style={styles.infoText}>{t('city.tipDrag')}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>2x</Text>
+              <Text style={styles.infoText}>{t('city.tipDoubleTap')}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>+</Text>
+              <Text style={styles.infoText}>{t('city.tipAutoBuild')}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>coin</Text>
+              <Text style={styles.infoText}>{t('city.tipEarnTokens')}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.infoCloseButton}
+              onPress={() => setInfoVisible(false)}
+            >
+              <Text style={styles.infoCloseText}>{t('city.gotIt')}</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <BuildingSheet
         visible={sheetVisible}
@@ -1074,6 +1136,76 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       textAlign: "center" as const,
       marginTop: 12,
+    },
+    infoButton: {
+      position: "absolute" as const,
+      left: 16,
+      bottom: 220,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      zIndex: 20,
+    },
+    infoButtonText: {
+      fontSize: 16,
+      fontWeight: "600" as const,
+      color: colors.textSecondary,
+      fontStyle: "italic" as const,
+    },
+    infoModalOverlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: "center" as const,
+    },
+    infoModalContent: {
+      backgroundColor: colors.background,
+      marginHorizontal: 30,
+      borderRadius: 16,
+      padding: 24,
+    },
+    infoModalTitle: {
+      fontSize: 18,
+      fontWeight: "700" as const,
+      color: colors.text,
+      marginBottom: 16,
+    },
+    infoRow: {
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
+      marginBottom: 14,
+      gap: 12,
+    },
+    infoIcon: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      width: 34,
+      textAlign: "center" as const,
+      marginTop: 3,
+      fontWeight: "700" as const,
+    },
+    infoText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      flex: 1,
+      lineHeight: 20,
+    },
+    infoCloseButton: {
+      marginTop: 8,
+      alignSelf: "center" as const,
+      paddingVertical: 10,
+      paddingHorizontal: 32,
+      backgroundColor: colors.accent,
+      borderRadius: 10,
+    },
+    infoCloseText: {
+      color: colors.textInverse,
+      fontSize: 15,
+      fontWeight: "600" as const,
     },
   };
 }

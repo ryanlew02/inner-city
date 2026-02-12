@@ -125,7 +125,8 @@ export async function getPlacedBuildings(): Promise<PlacedBuilding[]> {
 export async function getBuildingById(id: string): Promise<PlacedBuilding | null> {
   const db = await getDatabase();
   const result = await db.getFirstAsync<PlacedBuilding>(
-    `SELECT * FROM placed_buildings WHERE id = '${id}'`
+    'SELECT * FROM placed_buildings WHERE id = ?',
+    [id]
   );
   return result || null;
 }
@@ -141,10 +142,10 @@ export async function placeBuilding(
   const created_at = Date.now();
   const size = BUILDING_SIZES[buildingType];
 
-  await db.execAsync(`
-    INSERT INTO placed_buildings (id, plot_index, grid_row, grid_col, building_type, tier, variant, size_x, size_y, created_at)
-    VALUES ('${id}', ${row * 1000 + col}, ${row}, ${col}, '${buildingType}', 1, ${variant}, ${size.x}, ${size.y}, ${created_at})
-  `);
+  await db.runAsync(
+    'INSERT INTO placed_buildings (id, plot_index, grid_row, grid_col, building_type, tier, variant, size_x, size_y, created_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)',
+    [id, row * 1000 + col, row, col, buildingType, variant, size.x, size.y, created_at]
+  );
 
   return {
     id,
@@ -185,8 +186,9 @@ export async function upgradeBuilding(buildingId: string): Promise<PlacedBuildin
     : building.variant;
 
   const db = await getDatabase();
-  await db.execAsync(
-    `UPDATE placed_buildings SET tier = ${newTier}, variant = ${newVariant} WHERE id = '${buildingId}'`
+  await db.runAsync(
+    'UPDATE placed_buildings SET tier = ?, variant = ? WHERE id = ?',
+    [newTier, newVariant, buildingId]
   );
 
   return {
@@ -219,7 +221,7 @@ export function getDemolishRefund(tier: number): number {
 
 export async function demolishBuilding(buildingId: string): Promise<boolean> {
   const db = await getDatabase();
-  await db.execAsync(`DELETE FROM placed_buildings WHERE id = '${buildingId}'`);
+  await db.runAsync('DELETE FROM placed_buildings WHERE id = ?', [buildingId]);
   return true;
 }
 
@@ -279,13 +281,15 @@ export async function migrateToGridCoordinates(): Promise<void> {
     const pos = oldPlotIndexToPosition(building.plot_index, rows, cols);
     if (pos) {
       try {
-        await db.execAsync(
-          `UPDATE placed_buildings SET grid_row = ${pos.row}, grid_col = ${pos.col}, plot_index = ${pos.row * 1000 + pos.col} WHERE id = '${building.id}'`
+        await db.runAsync(
+          'UPDATE placed_buildings SET grid_row = ?, grid_col = ?, plot_index = ? WHERE id = ?',
+          [pos.row, pos.col, pos.row * 1000 + pos.col, building.id]
         );
       } catch (e) {
         // If plot_index update fails (e.g. legacy unique constraint), just set grid coords
-        await db.execAsync(
-          `UPDATE placed_buildings SET grid_row = ${pos.row}, grid_col = ${pos.col} WHERE id = '${building.id}'`
+        await db.runAsync(
+          'UPDATE placed_buildings SET grid_row = ?, grid_col = ? WHERE id = ?',
+          [pos.row, pos.col, building.id]
         );
       }
     }

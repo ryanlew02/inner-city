@@ -14,35 +14,36 @@ export async function createHabit(habit: Omit<Habit, 'id' | 'created_at' | 'arch
   const id = generateUUID();
   const created_at = Date.now();
 
-  const name = habit.name.replace(/'/g, "''");
-  const description = (habit.description || '').replace(/'/g, "''");
-  const color = (habit.color || '#22C55E').replace(/'/g, "''");
-  const icon = (habit.icon || '').replace(/'/g, "''");
+  const name = habit.name;
+  const description = habit.description || '';
+  const color = habit.color || '#22C55E';
+  const icon = habit.icon || '';
   const target_type = habit.target_type || 'check';
   const target_value = habit.target_value || 1;
   const schedule_type = habit.schedule_type || 'daily';
-  const schedule_json = (habit.schedule_json || '{}').replace(/'/g, "''");
+  const schedule_json = habit.schedule_json || '{}';
 
   // Shift existing habits down so new habit appears at top (sort_order = 0)
-  await db.execAsync(`UPDATE habits SET sort_order = sort_order + 1 WHERE archived = 0`);
+  await db.runAsync(`UPDATE habits SET sort_order = sort_order + 1 WHERE archived = 0`);
 
-  await db.execAsync(`
-    INSERT INTO habits (id, name, description, created_at, archived, color, icon, target_type, target_value, schedule_type, schedule_json, sort_order)
-    VALUES ('${id}', '${name}', '${description}', ${created_at}, 0, '${color}', '${icon}', '${target_type}', ${target_value}, '${schedule_type}', '${schedule_json}', 0)
-  `);
+  await db.runAsync(
+    `INSERT INTO habits (id, name, description, created_at, archived, color, icon, target_type, target_value, schedule_type, schedule_json, sort_order)
+     VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 0)`,
+    [id, name, description, created_at, color, icon, target_type, target_value, schedule_type, schedule_json]
+  );
 
   return {
     id,
     created_at,
     archived: 0,
-    name: habit.name,
-    description: habit.description || '',
-    color: habit.color || '#22C55E',
-    icon: habit.icon || '',
-    target_type: habit.target_type || 'check',
-    target_value: habit.target_value || 1,
-    schedule_type: habit.schedule_type || 'daily',
-    schedule_json: habit.schedule_json || '{}',
+    name,
+    description,
+    color,
+    icon,
+    target_type,
+    target_value,
+    schedule_type,
+    schedule_json,
     sort_order: 0,
   };
 }
@@ -51,45 +52,56 @@ export async function updateHabit(id: string, updates: Partial<Omit<Habit, 'id' 
   const db = await getDatabase();
 
   const setParts: string[] = [];
+  const params: (string | number)[] = [];
 
   if (updates.name !== undefined) {
-    setParts.push(`name = '${updates.name.replace(/'/g, "''")}'`);
+    setParts.push('name = ?');
+    params.push(updates.name);
   }
   if (updates.description !== undefined) {
-    setParts.push(`description = '${updates.description.replace(/'/g, "''")}'`);
+    setParts.push('description = ?');
+    params.push(updates.description);
   }
   if (updates.color !== undefined) {
-    setParts.push(`color = '${updates.color.replace(/'/g, "''")}'`);
+    setParts.push('color = ?');
+    params.push(updates.color);
   }
   if (updates.icon !== undefined) {
-    setParts.push(`icon = '${updates.icon.replace(/'/g, "''")}'`);
+    setParts.push('icon = ?');
+    params.push(updates.icon);
   }
   if (updates.target_type !== undefined) {
-    setParts.push(`target_type = '${updates.target_type}'`);
+    setParts.push('target_type = ?');
+    params.push(updates.target_type);
   }
   if (updates.target_value !== undefined) {
-    setParts.push(`target_value = ${updates.target_value}`);
+    setParts.push('target_value = ?');
+    params.push(updates.target_value);
   }
   if (updates.schedule_type !== undefined) {
-    setParts.push(`schedule_type = '${updates.schedule_type}'`);
+    setParts.push('schedule_type = ?');
+    params.push(updates.schedule_type);
   }
   if (updates.schedule_json !== undefined) {
-    setParts.push(`schedule_json = '${updates.schedule_json.replace(/'/g, "''")}'`);
+    setParts.push('schedule_json = ?');
+    params.push(updates.schedule_json);
   }
   if (updates.archived !== undefined) {
-    setParts.push(`archived = ${updates.archived}`);
+    setParts.push('archived = ?');
+    params.push(updates.archived);
   }
 
   if (setParts.length === 0) {
     return;
   }
 
-  await db.execAsync(`UPDATE habits SET ${setParts.join(', ')} WHERE id = '${id}'`);
+  params.push(id);
+  await db.runAsync(`UPDATE habits SET ${setParts.join(', ')} WHERE id = ?`, params);
 }
 
 export async function archiveHabit(id: string): Promise<void> {
   const db = await getDatabase();
-  await db.execAsync(`UPDATE habits SET archived = 1 WHERE id = '${id}'`);
+  await db.runAsync('UPDATE habits SET archived = 1 WHERE id = ?', [id]);
 }
 
 export async function clearAllHabitData(): Promise<void> {
@@ -101,6 +113,6 @@ export async function clearAllHabitData(): Promise<void> {
 export async function updateHabitOrder(habits: { id: string; sort_order: number }[]): Promise<void> {
   const db = await getDatabase();
   for (const habit of habits) {
-    await db.execAsync(`UPDATE habits SET sort_order = ${habit.sort_order} WHERE id = '${habit.id}'`);
+    await db.runAsync('UPDATE habits SET sort_order = ? WHERE id = ?', [habit.sort_order, habit.id]);
   }
 }
