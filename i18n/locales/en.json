@@ -185,7 +185,8 @@
     "presetColors": "Preset Colors",
     "hideCustom": "Hide Custom Color Picker",
     "createCustom": "Create Custom Color",
-    "scheduleTitle": "Schedule"
+    "scheduleTitle": "Schedule",
+    "newHabit": "New Habit"
   },
   "building": {
     "buildNew": "Build New Building",

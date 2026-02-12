@@ -185,7 +185,8 @@
     "presetColors": "Couleurs Prédéfinies",
     "hideCustom": "Masquer le Sélecteur de Couleur Personnalisé",
     "createCustom": "Créer une Couleur Personnalisée",
-    "scheduleTitle": "Horaire"
+    "scheduleTitle": "Horaire",
+    "newHabit": "Nouvelle Habitude"
   },
   "building": {
     "buildNew": "Construire un Nouveau Bâtiment",

@@ -185,7 +185,8 @@
     "presetColors": "프리셋 색상",
     "hideCustom": "사용자 정의 색상 선택기 숨기기",
     "createCustom": "사용자 정의 색상 만들기",
-    "scheduleTitle": "일정"
+    "scheduleTitle": "일정",
+    "newHabit": "새 습관"
   },
   "building": {
     "buildNew": "새 건물 건설",

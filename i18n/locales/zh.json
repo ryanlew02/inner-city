@@ -185,7 +185,8 @@
     "presetColors": "预设颜色",
     "hideCustom": "隐藏自定义颜色选择器",
     "createCustom": "创建自定义颜色",
-    "scheduleTitle": "日程安排"
+    "scheduleTitle": "日程安排",
+    "newHabit": "新习惯"
   },
   "building": {
     "buildNew": "建造新建筑",

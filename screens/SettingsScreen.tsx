@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  SafeAreaView,
   Linking,
   Alert,
   ActivityIndicator,
@@ -260,7 +259,7 @@ export default function SettingsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setAppearanceVisible(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setAppearanceVisible(false)}>
               <Text style={styles.modalClose}>{t('settings.doneButton')}</Text>
@@ -299,7 +298,7 @@ export default function SettingsScreen() {
               ))}
             </View>
           </View>
-        </SafeAreaView>
+        </View>
       </Modal>
 
       {/* Reset Picker Modal */}
@@ -309,7 +308,7 @@ export default function SettingsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setResetPickerVisible(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setResetPickerVisible(false)}>
               <Text style={styles.modalClose}>{t('settings.cancelButton')}</Text>
@@ -351,7 +350,7 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </SafeAreaView>
+        </View>
       </Modal>
 
       {/* Reset Confirmation Modal */}
@@ -362,7 +361,7 @@ export default function SettingsScreen() {
           presentationStyle="pageSheet"
           onRequestClose={handleResetClose}
         >
-          <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={handleResetClose}>
                 <Text style={styles.modalClose}>{t('settings.cancelButton')}</Text>
@@ -408,7 +407,7 @@ export default function SettingsScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-          </SafeAreaView>
+          </View>
         </Modal>
       )}
       {/* Privacy Policy Modal */}
@@ -418,7 +417,7 @@ export default function SettingsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setPrivacyVisible(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setPrivacyVisible(false)}>
               <Text style={styles.modalClose}>{t('settings.doneButton')}</Text>
@@ -476,7 +475,7 @@ export default function SettingsScreen() {
             <Text style={styles.policyBody}>Developer: Ryan Lewandowski</Text>
             <Text style={styles.policyBody}>Location: United States</Text>
           </ScrollView>
-        </SafeAreaView>
+        </View>
       </Modal>
 
       {/* Language Picker Modal */}
@@ -486,7 +485,7 @@ export default function SettingsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setLanguageVisible(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setLanguageVisible(false)}>
               <Text style={styles.modalClose}>{t('settings.doneButton')}</Text>
@@ -521,7 +520,7 @@ export default function SettingsScreen() {
               ))}
             </View>
           </View>
-        </SafeAreaView>
+        </View>
       </Modal>
     </ScrollView>
   );

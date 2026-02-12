@@ -335,6 +335,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   const addHabit = async (habit: Omit<Habit, 'id' | 'created_at' | 'archived' | 'sort_order'>): Promise<Habit> => {
     if (useInMemory.current) {
       // In-memory fallback
+      const maxOrder = habits.reduce((max, h) => Math.max(max, h.sort_order), -1);
       const newHabit: Habit = {
         id: generateUUID(),
         created_at: Date.now(),
@@ -347,14 +348,14 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         target_value: habit.target_value || 1,
         schedule_type: habit.schedule_type || 'daily',
         schedule_json: habit.schedule_json || '{}',
-        sort_order: 0,
+        sort_order: maxOrder + 1,
       };
-      setHabits(prev => [newHabit, ...prev.map(h => ({ ...h, sort_order: h.sort_order + 1 }))]);
+      setHabits(prev => [...prev, newHabit]);
       return newHabit;
     }
 
     const newHabit = await createHabit(habit);
-    setHabits(prev => [newHabit, ...prev]);
+    setHabits(prev => [...prev, newHabit]);
 
     const scheduleData = parseScheduleJson(newHabit.schedule_json);
     if (scheduleData.notification_enabled) {

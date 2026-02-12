@@ -185,7 +185,8 @@
     "presetColors": "Готовые Цвета",
     "hideCustom": "Скрыть Выбор Цвета",
     "createCustom": "Создать Свой Цвет",
-    "scheduleTitle": "Расписание"
+    "scheduleTitle": "Расписание",
+    "newHabit": "Новая Привычка"
   },
   "building": {
     "buildNew": "Построить Новое Здание",

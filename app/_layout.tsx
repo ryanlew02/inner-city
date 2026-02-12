@@ -31,7 +31,7 @@ function ThemedStatusBar() {
 
 export default function RootLayout() {
   useEffect(() => {
-    SplashScreen.hideAsync();
+    SplashScreen.hideAsync().catch(() => {});
   }, []);
 
   return (
@@ -47,7 +47,7 @@ export default function RootLayout() {
                 name="habit-form"
                 options={{
                   presentation: "modal",
-                  headerShown: false,
+                  headerShown: true,
                 }}
               />
             </Stack>

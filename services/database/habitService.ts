@@ -23,13 +23,14 @@ export async function createHabit(habit: Omit<Habit, 'id' | 'created_at' | 'arch
   const schedule_type = habit.schedule_type || 'daily';
   const schedule_json = habit.schedule_json || '{}';
 
-  // Shift existing habits down so new habit appears at top (sort_order = 0)
-  await db.runAsync(`UPDATE habits SET sort_order = sort_order + 1 WHERE archived = 0`);
+  // Get the max sort_order so new habit appears at bottom
+  const result = await db.getFirstAsync<{ max_order: number | null }>(`SELECT MAX(sort_order) as max_order FROM habits WHERE archived = 0`);
+  const newSortOrder = (result?.max_order ?? -1) + 1;
 
   await db.runAsync(
     `INSERT INTO habits (id, name, description, created_at, archived, color, icon, target_type, target_value, schedule_type, schedule_json, sort_order)
-     VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 0)`,
-    [id, name, description, created_at, color, icon, target_type, target_value, schedule_type, schedule_json]
+     VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, name, description, created_at, color, icon, target_type, target_value, schedule_type, schedule_json, newSortOrder]
   );
 
   return {
@@ -44,7 +45,7 @@ export async function createHabit(habit: Omit<Habit, 'id' | 'created_at' | 'arch
     target_value,
     schedule_type,
     schedule_json,
-    sort_order: 0,
+    sort_order: newSortOrder,
   };
 }
 

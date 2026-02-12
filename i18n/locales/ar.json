@@ -185,7 +185,8 @@
     "presetColors": "الألوان المحددة مسبقاً",
     "hideCustom": "إخفاء منتقي الألوان المخصص",
     "createCustom": "إنشاء لون مخصص",
-    "scheduleTitle": "الجدول"
+    "scheduleTitle": "الجدول",
+    "newHabit": "عادة جديدة"
   },
   "building": {
     "buildNew": "بناء مبنى جديد",

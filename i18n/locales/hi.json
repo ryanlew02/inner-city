@@ -185,7 +185,8 @@
     "presetColors": "पूर्व निर्धारित रंग",
     "hideCustom": "कस्टम रंग पिकर छिपाएं",
     "createCustom": "कस्टम रंग बनाएं",
-    "scheduleTitle": "शेड्यूल"
+    "scheduleTitle": "शेड्यूल",
+    "newHabit": "नई आदत"
   },
   "building": {
     "buildNew": "नई इमारत बनाएं",

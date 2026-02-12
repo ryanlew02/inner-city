@@ -185,7 +185,8 @@
     "presetColors": "プリセットカラー",
     "hideCustom": "カスタムカラーピッカーを非表示",
     "createCustom": "カスタムカラーを作成",
-    "scheduleTitle": "スケジュール"
+    "scheduleTitle": "スケジュール",
+    "newHabit": "新しい習慣"
   },
   "building": {
     "buildNew": "新しい建物を建設",

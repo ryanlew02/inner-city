@@ -185,7 +185,8 @@
     "presetColors": "Cores Predefinidas",
     "hideCustom": "Ocultar Seletor de Cor Personalizada",
     "createCustom": "Criar Cor Personalizada",
-    "scheduleTitle": "Agenda"
+    "scheduleTitle": "Agenda",
+    "newHabit": "Novo Hábito"
   },
   "building": {
     "buildNew": "Construir Novo Edifício",
