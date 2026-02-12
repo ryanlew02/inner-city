@@ -81,6 +81,23 @@ export async function deleteEntryForHabit(habitId: string, date: string): Promis
   );
 }
 
+export async function hasCoinBeenAwarded(habitId: string, date: string): Promise<boolean> {
+  const db = await getDatabase();
+  const result = await db.getFirstAsync<{ habit_id: string }>(
+    'SELECT habit_id FROM coins_awarded WHERE habit_id = ? AND date = ?',
+    [habitId, date]
+  );
+  return !!result;
+}
+
+export async function markCoinAwarded(habitId: string, date: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    'INSERT OR IGNORE INTO coins_awarded (habit_id, date) VALUES (?, ?)',
+    [habitId, date]
+  );
+}
+
 export async function getTotalCompletedCount(): Promise<number> {
   const db = await getDatabase();
   const result = await db.getFirstAsync<{ count: number }>(

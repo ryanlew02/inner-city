@@ -77,7 +77,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       updateBuildings(loadedBuildings);
       setTokens(loadedTokens);
     } catch (error) {
-      console.error('Failed to load building data, using in-memory fallback:', error);
+      __DEV__ && console.error('Failed to load building data, using in-memory fallback:', error);
       useInMemory.current = true;
     } finally {
       setLoading(false);
@@ -90,7 +90,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       const count = await getTokenCount();
       setTokens(count);
     } catch (error) {
-      console.error('Failed to refresh tokens:', error);
+      __DEV__ && console.error('Failed to refresh tokens:', error);
     }
   };
 
@@ -104,7 +104,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       const newCount = await addTokensDb(amount);
       setTokens(newCount);
     } catch (error) {
-      console.error('Failed to add tokens:', error);
+      __DEV__ && console.error('Failed to add tokens:', error);
     }
   };
 
@@ -159,7 +159,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       playBuildSound();
       return true;
     } catch (error) {
-      console.error('Failed to place building:', error);
+      __DEV__ && console.error('Failed to place building:', error);
       return false;
     }
   };
@@ -204,7 +204,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       playBuildSound();
       return true;
     } catch (error) {
-      console.error('Failed to upgrade building:', error);
+      __DEV__ && console.error('Failed to upgrade building:', error);
       return false;
     }
   };
@@ -228,7 +228,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       setTokens(newCount);
       return true;
     } catch (error) {
-      console.error('Failed to demolish building:', error);
+      __DEV__ && console.error('Failed to demolish building:', error);
       return false;
     }
   };
@@ -243,7 +243,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
       await clearAllBuildingsDb();
       updateBuildings([]);
     } catch (error) {
-      console.error('Failed to reset city:', error);
+      __DEV__ && console.error('Failed to reset city:', error);
     }
   };
 

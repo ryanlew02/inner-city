@@ -4,8 +4,8 @@ import { useEffect } from "react";
 import { StatusBar } from "react-native";
 import "react-native-reanimated";
 
-import { HabitsProvider } from "../context/HabitsContext";
-import { BuildingProvider } from "../context/BuildingContext";
+import { HabitsProvider, useHabits } from "../context/HabitsContext";
+import { BuildingProvider, useBuildings } from "../context/BuildingContext";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
 import { SoundProvider } from "../context/SoundContext";
 import { LanguageProvider } from "../context/LanguageContext";
@@ -29,28 +29,41 @@ function ThemedStatusBar() {
   );
 }
 
-export default function RootLayout() {
-  useEffect(() => {
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
+function AppContent() {
+  const { loading: habitsLoading } = useHabits();
+  const { loading: buildingLoading } = useBuildings();
 
+  useEffect(() => {
+    if (!habitsLoading && !buildingLoading) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [habitsLoading, buildingLoading]);
+
+  return (
+    <>
+      <ThemedStatusBar />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(drawer)" />
+        <Stack.Screen
+          name="habit-form"
+          options={{
+            presentation: "modal",
+            headerShown: true,
+          }}
+        />
+      </Stack>
+    </>
+  );
+}
+
+export default function RootLayout() {
   return (
     <ThemeProvider>
       <LanguageProvider>
         <SoundProvider>
           <HabitsProvider>
             <BuildingProvider>
-            <ThemedStatusBar />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(drawer)" />
-              <Stack.Screen
-                name="habit-form"
-                options={{
-                  presentation: "modal",
-                  headerShown: true,
-                }}
-              />
-            </Stack>
+              <AppContent />
             </BuildingProvider>
           </HabitsProvider>
         </SoundProvider>

@@ -1,26 +1,26 @@
 import { useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  Linking,
-  Alert,
   ActivityIndicator,
-  Switch,
-  Share,
+  Alert,
+  Linking,
+  Modal,
   Platform,
+  ScrollView,
+  Share,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { ThemeColors } from "../constants/Colors";
 import { useBuildings } from "../context/BuildingContext";
 import { useHabits } from "../context/HabitsContext";
-import { useTheme } from "../context/ThemeContext";
+import { LANGUAGE_OPTIONS, useLanguage } from "../context/LanguageContext";
 import { useSound } from "../context/SoundContext";
-import { useLanguage, LANGUAGE_OPTIONS } from "../context/LanguageContext";
-import { ThemePreference } from "../services/database/themeService";
-import { ThemeColors } from "../constants/Colors";
+import { useTheme } from "../context/ThemeContext";
 import { exportAllData, importAllData } from "../services/database/dataExportService";
+import { ThemePreference } from "../services/database/themeService";
 
 type ResetTarget = "city" | "habits" | null;
 
@@ -57,8 +57,9 @@ export default function SettingsScreen() {
   const handleExport = async () => {
     try {
       await exportAllData();
-    } catch (e: any) {
-      Alert.alert(t('settings.exportFailed'), e.message || "An error occurred while exporting.");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "An error occurred while exporting.";
+      Alert.alert(t('settings.exportFailed'), message);
     }
   };
 
@@ -76,9 +77,10 @@ export default function SettingsScreen() {
             try {
               await importAllData();
               Alert.alert(t('settings.importSuccess'), t('settings.importSuccessMessage'));
-            } catch (e: any) {
-              if (e.message !== "cancelled") {
-                Alert.alert(t('settings.importFailed'), e.message || "An error occurred while importing.");
+            } catch (e: unknown) {
+              const message = e instanceof Error ? e.message : "";
+              if (message !== "cancelled") {
+                Alert.alert(t('settings.importFailed'), message || "An error occurred while importing.");
               }
             } finally {
               setImporting(false);
@@ -91,8 +93,8 @@ export default function SettingsScreen() {
 
   const handleRate = () => {
     const storeUrl = Platform.select({
-      ios: "https://apps.apple.com/app/id_PLACEHOLDER",
-      android: "https://play.google.com/store/apps/details?id=com.anonymous.habitcitynew",
+      ios: "https://innercity.carrd.co/",
+      android: "https://innercity.carrd.co/",
     });
     if (storeUrl) Linking.openURL(storeUrl);
   };

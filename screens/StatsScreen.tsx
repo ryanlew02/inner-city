@@ -171,7 +171,7 @@ async function loadEntriesForRange(
         entries.forEach((e) => dateMap.set(e.date, e));
         newMap.set(habit.id, dateMap);
       } catch (err) {
-        console.error(`Failed to load entries for habit ${habit.id}:`, err);
+        __DEV__ && console.error(`Failed to load entries for habit ${habit.id}:`, err);
         newMap.set(habit.id, new Map());
       }
     })

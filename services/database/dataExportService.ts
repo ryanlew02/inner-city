@@ -76,6 +76,7 @@ export async function importAllData(): Promise<void> {
   const db = await getDatabase();
 
   await db.execAsync('DELETE FROM habit_entries');
+  await db.execAsync('DELETE FROM coins_awarded');
   await db.execAsync('DELETE FROM habits');
   await db.execAsync('DELETE FROM placed_buildings');
   await db.execAsync('DELETE FROM app_settings');

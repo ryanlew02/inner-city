@@ -3,7 +3,7 @@ import { AppState, AppStateStatus } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { Habit, HabitEntry, parseScheduleJson, isScheduledForToday, isScheduledForDate } from "../types/habit";
 import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb, updateHabitOrder, clearAllHabitData as clearAllHabitDataDb } from "../services/database/habitService";
-import { getEntriesForDate, upsertEntry, deleteEntryForHabit } from "../services/database/entryService";
+import { getEntriesForDate, upsertEntry, deleteEntryForHabit, hasCoinBeenAwarded, markCoinAwarded, getEntryForHabit } from "../services/database/entryService";
 import { generateUUID } from "../services/database/db";
 import { useSound } from "./SoundContext";
 import { addTokens as addTokensDb } from "../services/database/tokenService";
@@ -35,6 +35,17 @@ type HabitsContextType = {
 
 const HabitsContext = createContext<HabitsContextType | null>(null);
 
+function getYesterday(todayStr: string): string {
+  const date = new Date(todayStr + 'T12:00:00');
+  date.setDate(date.getDate() - 1);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(date);
+}
+
 function getTodayDate(): string {
   // Use Intl.DateTimeFormat to get the date in the user's local timezone
   // This is more reliable than new Date() getters across JS engines
@@ -57,6 +68,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   const [onTokenEarned, setOnTokenEarned] = useState<(() => void) | undefined>(undefined);
   const { soundEnabled } = useSound();
   const useInMemory = useRef(false);
+  const inMemoryCoinsAwarded = useRef(new Set<string>());
   const appState = useRef(AppState.currentState);
   const completionPlayer = useAudioPlayer(require("../assets/sounds/complete.wav"));
 
@@ -79,6 +91,9 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         // App has come to foreground - check if date changed
         const today = getTodayDate();
         if (today !== currentDate) {
+          // Award quit habit coins for yesterday before switching dates
+          const yesterday = getYesterday(today);
+          awardQuitHabitCoins(yesterday, habits);
           // Clear entries immediately to avoid showing yesterday's completed data
           setEntries(new Map());
           setCurrentDate(today);
@@ -86,7 +101,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           reloadEntriesForDate(today);
         }
         // Reschedule days_of_month notifications (they use fixed dates)
-        rescheduleMonthlyNotifications(habits).catch(console.error);
+        rescheduleMonthlyNotifications(habits).catch(() => {});
       }
       appState.current = nextAppState;
     };
@@ -94,6 +109,50 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
   }, [currentDate]);
+
+  async function awardQuitHabitCoins(dateToCheck: string, habitsList: Habit[]) {
+    if (useInMemory.current) return;
+    try {
+      const quitHabits = habitsList.filter(h => {
+        if (h.archived) return false;
+        const schedule = parseScheduleJson(h.schedule_json);
+        if (schedule.habit_mode !== 'quit') return false;
+        // Check the habit was created before or on the date
+        const checkDateObj = new Date(dateToCheck + 'T00:00:00');
+        const createdDate = new Date(h.created_at);
+        createdDate.setHours(0, 0, 0, 0);
+        if (checkDateObj < createdDate) return false;
+        // Check it was scheduled for that date
+        return isScheduledForDate(schedule, checkDateObj);
+      });
+
+      let coinsToAward = 0;
+      for (const habit of quitHabits) {
+        const alreadyAwarded = await hasCoinBeenAwarded(habit.id, dateToCheck);
+        if (alreadyAwarded) continue;
+
+        const entry = await getEntryForHabit(habit.id, dateToCheck);
+        let completed = false;
+        if (habit.target_type === 'check') {
+          completed = !entry || entry.value === 0;
+        } else {
+          completed = !entry || entry.value < habit.target_value;
+        }
+
+        if (completed) {
+          await markCoinAwarded(habit.id, dateToCheck);
+          coinsToAward++;
+        }
+      }
+
+      if (coinsToAward > 0) {
+        await addTokensDb(coinsToAward);
+        onTokenEarned?.();
+      }
+    } catch (error) {
+      __DEV__ && console.error('Failed to award quit habit coins:', error);
+    }
+  }
 
   async function reloadEntriesForDate(date: string) {
     if (useInMemory.current) {
@@ -110,7 +169,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       });
       setEntries(entriesMap);
     } catch (error) {
-      console.error('Failed to reload entries for new date:', error);
+      __DEV__ && console.error('Failed to reload entries for new date:', error);
     }
   }
 
@@ -132,8 +191,12 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         entriesMap.set(entry.habit_id, entry);
       });
       setEntries(entriesMap);
+
+      // Award quit habit coins for yesterday on app startup
+      const yesterday = getYesterday(currentDate);
+      await awardQuitHabitCoins(yesterday, loadedHabits);
     } catch (error) {
-      console.error('Failed to load habits data, using in-memory fallback:', error);
+      __DEV__ && console.error('Failed to load habits data, using in-memory fallback:', error);
       useInMemory.current = true;
     } finally {
       setLoading(false);
@@ -215,8 +278,14 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           return newMap;
         });
         if (!isQuitCheck && (!existingEntry || existingEntry.value === 0)) {
-          playCompletionSound();
-          onTokenEarned?.();
+          const key = `${id}:${viewingDate}`;
+          if (!inMemoryCoinsAwarded.current.has(key)) {
+            inMemoryCoinsAwarded.current.add(key);
+            playCompletionSound();
+            onTokenEarned?.();
+          } else {
+            playCompletionSound();
+          }
         }
       }
       return;
@@ -243,13 +312,19 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           return newMap;
         });
         if (!isQuitCheck && (!existingEntry || existingEntry.value === 0)) {
-          playCompletionSound();
-          await addTokensDb(1);
-          onTokenEarned?.();
+          const alreadyAwarded = await hasCoinBeenAwarded(id, viewingDate);
+          if (!alreadyAwarded) {
+            await markCoinAwarded(id, viewingDate);
+            playCompletionSound();
+            await addTokensDb(1);
+            onTokenEarned?.();
+          } else {
+            playCompletionSound();
+          }
         }
       }
     } catch (error) {
-      console.error('Failed to toggle habit:', error);
+      __DEV__ && console.error('Failed to toggle habit:', error);
     }
   };
 
@@ -276,7 +351,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           return newMap;
         });
       } catch (error) {
-        console.error('Failed to delete entry:', error);
+        __DEV__ && console.error('Failed to delete entry:', error);
       }
       return;
     }
@@ -300,8 +375,14 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       if (!wasCompleted && habit) {
         const targetValue = habit.target_value;
         if (value >= targetValue) {
-          playCompletionSound();
-          onTokenEarned?.();
+          const key = `${habitId}:${viewingDate}`;
+          if (!inMemoryCoinsAwarded.current.has(key)) {
+            inMemoryCoinsAwarded.current.add(key);
+            playCompletionSound();
+            onTokenEarned?.();
+          } else {
+            playCompletionSound();
+          }
         }
       }
       return;
@@ -322,13 +403,19 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       if (!wasCompleted && habit) {
         const targetValue = habit.target_value;
         if (value >= targetValue) {
-          playCompletionSound();
-          await addTokensDb(1);
-          onTokenEarned?.();
+          const alreadyAwarded = await hasCoinBeenAwarded(habitId, viewingDate);
+          if (!alreadyAwarded) {
+            await markCoinAwarded(habitId, viewingDate);
+            playCompletionSound();
+            await addTokensDb(1);
+            onTokenEarned?.();
+          } else {
+            playCompletionSound();
+          }
         }
       }
     } catch (error) {
-      console.error('Failed to update entry value:', error);
+      __DEV__ && console.error('Failed to update entry value:', error);
     }
   };
 
@@ -359,7 +446,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
 
     const scheduleData = parseScheduleJson(newHabit.schedule_json);
     if (scheduleData.notification_enabled) {
-      scheduleHabitNotifications(newHabit).catch(console.error);
+      scheduleHabitNotifications(newHabit).catch(() => {});
     }
 
     return newHabit;
@@ -378,7 +465,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       const scheduleData = parseScheduleJson(merged.schedule_json);
       await cancelHabitNotifications(id);
       if (scheduleData.notification_enabled) {
-        scheduleHabitNotifications(merged as Habit).catch(console.error);
+        scheduleHabitNotifications(merged as Habit).catch(() => {});
       }
     }
     setHabits(prev => prev.map(h => h.id === id ? { ...h, ...updates } : h));
@@ -390,7 +477,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    await cancelHabitNotifications(id).catch(console.error);
+    await cancelHabitNotifications(id).catch(() => {});
     await archiveHabitDb(id);
     setHabits(prev => prev.filter(h => h.id !== id));
   };
@@ -404,7 +491,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       const updated = newHabits.map((h, i) => ({ ...h, sort_order: i }));
       // Persist to DB
       if (!useInMemory.current) {
-        updateHabitOrder(updated.map(h => ({ id: h.id, sort_order: h.sort_order }))).catch(console.error);
+        updateHabitOrder(updated.map(h => ({ id: h.id, sort_order: h.sort_order }))).catch(() => {});
       }
       return updated;
     });

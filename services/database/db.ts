@@ -77,6 +77,13 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
         value TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS coins_awarded (
+        habit_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        PRIMARY KEY (habit_id, date),
+        FOREIGN KEY (habit_id) REFERENCES habits(id)
+      );
+
       INSERT OR IGNORE INTO user_stats (id, tokens) VALUES ('user', 0);
     `);
 
@@ -151,7 +158,7 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
         `);
       }
     } catch (e) {
-      console.warn('Legacy constraint cleanup (non-fatal):', e);
+      __DEV__ && console.warn('Legacy constraint cleanup (non-fatal):', e);
     }
 
     // Migration: Add sort_order column to habits table
@@ -166,7 +173,7 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
       const { migrateToGridCoordinates } = require('./buildingService');
       await migrateToGridCoordinates();
     } catch (e) {
-      console.warn('Building migration failed (non-fatal):', e);
+      __DEV__ && console.warn('Building migration failed (non-fatal):', e);
     }
 
     isInitializing = false;
@@ -175,7 +182,7 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
     isInitializing = false;
     initError = error as Error;
     db = null;
-    console.error('Failed to initialize database:', error);
+    __DEV__ && console.error('Failed to initialize database:', error);
     throw error;
   }
 }
