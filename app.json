@@ -14,8 +14,12 @@
       "backgroundColor": "#121218"
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.ryanlewandowski.innercity"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.ryanlewandowski.innercity",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +28,10 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": [],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
       "package": "com.ryanlewandowski.innercity"
     },
     "web": {
@@ -41,6 +48,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1a205e5b-3cba-46b7-8b3d-79f756a618f8"
+      }
     }
   }
 }
