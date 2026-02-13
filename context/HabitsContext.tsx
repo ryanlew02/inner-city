@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
-import { AppState, AppStateStatus } from "react-native";
+import { Alert, AppState, AppStateStatus } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { Habit, HabitEntry, parseScheduleJson, isScheduledForToday, isScheduledForDate } from "../types/habit";
 import { getAllHabits, createHabit, updateHabit as updateHabitDb, archiveHabit as archiveHabitDb, updateHabitOrder, clearAllHabitData as clearAllHabitDataDb } from "../services/database/habitService";
@@ -101,7 +101,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
           reloadEntriesForDate(today);
         }
         // Reschedule days_of_month notifications (they use fixed dates)
-        rescheduleMonthlyNotifications(habits).catch(() => {});
+        rescheduleMonthlyNotifications(habits).catch((e) => { __DEV__ && console.warn('Failed to reschedule notifications:', e); });
       }
       appState.current = nextAppState;
     };
@@ -198,6 +198,10 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       __DEV__ && console.error('Failed to load habits data, using in-memory fallback:', error);
       useInMemory.current = true;
+      Alert.alert(
+        'Data Error',
+        'Unable to load your saved data. Changes made this session will not be saved. Try restarting the app.',
+      );
     } finally {
       setLoading(false);
     }
@@ -446,7 +450,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
 
     const scheduleData = parseScheduleJson(newHabit.schedule_json);
     if (scheduleData.notification_enabled) {
-      scheduleHabitNotifications(newHabit).catch(() => {});
+      scheduleHabitNotifications(newHabit).catch((e) => { __DEV__ && console.warn('Failed to schedule notifications:', e); });
     }
 
     return newHabit;
@@ -465,7 +469,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       const scheduleData = parseScheduleJson(merged.schedule_json);
       await cancelHabitNotifications(id);
       if (scheduleData.notification_enabled) {
-        scheduleHabitNotifications(merged as Habit).catch(() => {});
+        scheduleHabitNotifications(merged as Habit).catch((e) => { __DEV__ && console.warn('Failed to schedule notifications:', e); });
       }
     }
     setHabits(prev => prev.map(h => h.id === id ? { ...h, ...updates } : h));
@@ -477,7 +481,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    await cancelHabitNotifications(id).catch(() => {});
+    await cancelHabitNotifications(id).catch((e) => { __DEV__ && console.warn('Failed to cancel notifications:', e); });
     await archiveHabitDb(id);
     setHabits(prev => prev.filter(h => h.id !== id));
   };
@@ -491,7 +495,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       const updated = newHabits.map((h, i) => ({ ...h, sort_order: i }));
       // Persist to DB
       if (!useInMemory.current) {
-        updateHabitOrder(updated.map(h => ({ id: h.id, sort_order: h.sort_order }))).catch(() => {});
+        updateHabitOrder(updated.map(h => ({ id: h.id, sort_order: h.sort_order }))).catch((e) => { __DEV__ && console.warn('Failed to update habit order:', e); });
       }
       return updated;
     });

@@ -218,6 +218,12 @@
     "buildAllButton": "모두 건설",
     "cancelButton": "취소"
   },
+  "drawer": {
+    "city": "도시",
+    "habits": "습관",
+    "stats": "통계",
+    "settings": "설정"
+  },
   "common": {
     "cancel": "취소",
     "done": "완료",

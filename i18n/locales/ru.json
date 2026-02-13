@@ -218,6 +218,12 @@
     "buildAllButton": "Построить Все",
     "cancelButton": "Отмена"
   },
+  "drawer": {
+    "city": "Город",
+    "habits": "Привычки",
+    "stats": "Статистика",
+    "settings": "Настройки"
+  },
   "common": {
     "cancel": "Отмена",
     "done": "Готово",

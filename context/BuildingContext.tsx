@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
+import { Alert } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import {
   BUILDING_COST,
@@ -79,6 +80,10 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       __DEV__ && console.error('Failed to load building data, using in-memory fallback:', error);
       useInMemory.current = true;
+      Alert.alert(
+        'Data Error',
+        'Unable to load your city data. Changes made this session will not be saved. Try restarting the app.',
+      );
     } finally {
       setLoading(false);
     }

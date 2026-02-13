@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Constants from "expo-constants";
 import { ThemeColors } from "../constants/Colors";
 import { useBuildings } from "../context/BuildingContext";
 import { useHabits } from "../context/HabitsContext";
@@ -206,7 +207,7 @@ export default function SettingsScreen() {
         <View style={styles.menuGroup}>
           <View style={styles.menuRow}>
             <Text style={styles.infoLabel}>{t('settings.version')}</Text>
-            <Text style={styles.infoValue}>1.0.0</Text>
+            <Text style={styles.infoValue}>{Constants.expoConfig?.version ?? "1.0.0"}</Text>
           </View>
           <TouchableOpacity
             style={styles.menuRow}

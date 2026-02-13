@@ -218,6 +218,12 @@
     "buildAllButton": "Construir Todos",
     "cancelButton": "Cancelar"
   },
+  "drawer": {
+    "city": "Cidade",
+    "habits": "Hábitos",
+    "stats": "Estatísticas",
+    "settings": "Configurações"
+  },
   "common": {
     "cancel": "Cancelar",
     "done": "Concluído",

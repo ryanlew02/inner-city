@@ -35,7 +35,7 @@ function AppContent() {
 
   useEffect(() => {
     if (!habitsLoading && !buildingLoading) {
-      SplashScreen.hideAsync().catch(() => {});
+      SplashScreen.hideAsync().catch((e) => { __DEV__ && console.warn('SplashScreen.hideAsync failed:', e); });
     }
   }, [habitsLoading, buildingLoading]);
 

@@ -218,6 +218,12 @@
     "buildAllButton": "すべて建設",
     "cancelButton": "キャンセル"
   },
+  "drawer": {
+    "city": "シティ",
+    "habits": "習慣",
+    "stats": "統計",
+    "settings": "設定"
+  },
   "common": {
     "cancel": "キャンセル",
     "done": "完了",

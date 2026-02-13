@@ -218,6 +218,12 @@
     "buildAllButton": "Build All",
     "cancelButton": "Cancel"
   },
+  "drawer": {
+    "city": "City",
+    "habits": "Habits",
+    "stats": "Stats",
+    "settings": "Settings"
+  },
   "common": {
     "cancel": "Cancel",
     "done": "Done",

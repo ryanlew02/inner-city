@@ -218,6 +218,12 @@
     "buildAllButton": "全部建造",
     "cancelButton": "取消"
   },
+  "drawer": {
+    "city": "城市",
+    "habits": "习惯",
+    "stats": "统计",
+    "settings": "设置"
+  },
   "common": {
     "cancel": "取消",
     "done": "完成",

@@ -218,6 +218,12 @@
     "buildAllButton": "सभी बनाएं",
     "cancelButton": "रद्द करें"
   },
+  "drawer": {
+    "city": "शहर",
+    "habits": "आदतें",
+    "stats": "आँकड़े",
+    "settings": "सेटिंग्स"
+  },
   "common": {
     "cancel": "रद्द करें",
     "done": "पूर्ण",

@@ -218,6 +218,12 @@
     "buildAllButton": "بناء الكل",
     "cancelButton": "إلغاء"
   },
+  "drawer": {
+    "city": "المدينة",
+    "habits": "العادات",
+    "stats": "الإحصائيات",
+    "settings": "الإعدادات"
+  },
   "common": {
     "cancel": "إلغاء",
     "done": "تم",

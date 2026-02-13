@@ -29,7 +29,8 @@
       "Bash(del \"C:\\\\Users\\\\ryanl\\\\OneDrive\\\\Desktop\\\\inner-city\\\\app\\\\\\(drawer\\)\\\\week.tsx\")",
       "Bash(node -e:*)",
       "Bash(del:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(test:*)"
     ]
   }
 }
