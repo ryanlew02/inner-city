@@ -30,7 +30,8 @@
       "Bash(node -e:*)",
       "Bash(del:*)",
       "Bash(echo:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(find:*)"
     ]
   }
 }
