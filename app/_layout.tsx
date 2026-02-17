@@ -13,7 +13,7 @@ import { LanguageProvider } from "../context/LanguageContext";
 export { ErrorBoundary } from "expo-router";
 
 export const unstable_settings = {
-  initialRouteName: "(drawer)",
+  initialRouteName: "drawer",
 };
 
 SplashScreen.preventAutoHideAsync();
@@ -43,7 +43,7 @@ function AppContent() {
     <>
       <ThemedStatusBar />
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(drawer)" />
+        <Stack.Screen name="drawer" />
         <Stack.Screen
           name="habit-form"
           options={{
