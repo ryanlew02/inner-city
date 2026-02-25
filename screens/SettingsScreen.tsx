@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -13,7 +14,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Constants from "expo-constants";
 import { ThemeColors } from "../constants/Colors";
 import { useBuildings } from "../context/BuildingContext";
 import { useHabits } from "../context/HabitsContext";
