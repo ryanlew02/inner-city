@@ -3,32 +3,22 @@ import * as SQLite from 'expo-sqlite';
 const DATABASE_NAME = 'habits.db';
 
 let db: SQLite.SQLiteDatabase | null = null;
-let isInitializing = false;
-let initError: Error | null = null;
+// Single shared promise — all concurrent callers await the same init,
+// eliminating the recursive spin-wait that could hang on iOS.
+let initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
-export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
-  // If we had a previous init error, throw it
-  if (initError) {
-    throw initError;
+export function getDatabase(): Promise<SQLite.SQLiteDatabase> {
+  if (db) return Promise.resolve(db);
+  if (!initPromise) {
+    initPromise = initializeDatabase();
   }
+  return initPromise;
+}
 
-  // If already initialized and valid, return it
-  if (db) {
-    return db;
-  }
-
-  // Prevent concurrent initialization
-  if (isInitializing) {
-    // Wait for initialization to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
-    return getDatabase();
-  }
-
-  isInitializing = true;
-
+async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   try {
-    db = await SQLite.openDatabaseAsync(DATABASE_NAME);
-    await db.execAsync(`
+    const database = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    await database.execAsync(`
       CREATE TABLE IF NOT EXISTS habits (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -90,24 +80,24 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
     // Migration: Add size_x and size_y columns to existing placed_buildings table
     // These will fail silently if columns already exist
     try {
-      await db.execAsync(`ALTER TABLE placed_buildings ADD COLUMN size_x INTEGER DEFAULT 1`);
+      await database.execAsync(`ALTER TABLE placed_buildings ADD COLUMN size_x INTEGER DEFAULT 1`);
     } catch (e) {
       // Column already exists, ignore
     }
     try {
-      await db.execAsync(`ALTER TABLE placed_buildings ADD COLUMN size_y INTEGER DEFAULT 1`);
+      await database.execAsync(`ALTER TABLE placed_buildings ADD COLUMN size_y INTEGER DEFAULT 1`);
     } catch (e) {
       // Column already exists, ignore
     }
 
     // Migration: Add grid_row and grid_col columns for stable building positions
     try {
-      await db.execAsync(`ALTER TABLE placed_buildings ADD COLUMN grid_row INTEGER`);
+      await database.execAsync(`ALTER TABLE placed_buildings ADD COLUMN grid_row INTEGER`);
     } catch (e) {
       // Column already exists, ignore
     }
     try {
-      await db.execAsync(`ALTER TABLE placed_buildings ADD COLUMN grid_col INTEGER`);
+      await database.execAsync(`ALTER TABLE placed_buildings ADD COLUMN grid_col INTEGER`);
     } catch (e) {
       // Column already exists, ignore
     }
@@ -116,30 +106,30 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
     // SQLite doesn't support DROP CONSTRAINT, so we recreate the table if needed.
     try {
       // Check if plot_index has a unique constraint (from table SQL or index)
-      const tableInfo = await db.getFirstAsync<{ sql: string }>(
+      const tableInfo = await database.getFirstAsync<{ sql: string }>(
         `SELECT sql FROM sqlite_master WHERE type='table' AND name='placed_buildings'`
       );
       const hasUniqueInSchema = tableInfo?.sql?.toLowerCase().includes('plot_index') &&
         tableInfo?.sql?.toLowerCase().includes('unique');
 
       // Also drop any standalone unique indexes on plot_index
-      await db.execAsync(`DROP INDEX IF EXISTS idx_placed_buildings_plot_index`);
-      await db.execAsync(`DROP INDEX IF EXISTS unique_plot_index`);
-      await db.execAsync(`DROP INDEX IF EXISTS placed_buildings_plot_index`);
+      await database.execAsync(`DROP INDEX IF EXISTS idx_placed_buildings_plot_index`);
+      await database.execAsync(`DROP INDEX IF EXISTS unique_plot_index`);
+      await database.execAsync(`DROP INDEX IF EXISTS placed_buildings_plot_index`);
 
       // Check for any remaining unique indexes on placed_buildings
-      const uniqueIndexes = await db.getAllAsync<{ name: string; sql: string }>(
+      const uniqueIndexes = await database.getAllAsync<{ name: string; sql: string }>(
         `SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='placed_buildings' AND sql IS NOT NULL`
       );
       for (const idx of uniqueIndexes) {
         if (idx.sql?.toLowerCase().includes('unique') && idx.sql?.toLowerCase().includes('plot_index')) {
-          await db.execAsync(`DROP INDEX IF EXISTS "${idx.name}"`);
+          await database.execAsync(`DROP INDEX IF EXISTS "${idx.name}"`);
         }
       }
 
       if (hasUniqueInSchema) {
         // Recreate table without the UNIQUE constraint
-        await db.execAsync(`
+        await database.execAsync(`
           CREATE TABLE IF NOT EXISTS placed_buildings_new (
             id TEXT PRIMARY KEY,
             plot_index INTEGER NOT NULL DEFAULT 0,
@@ -163,7 +153,7 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 
     // Migration: Add sort_order column to habits table
     try {
-      await db.execAsync(`ALTER TABLE habits ADD COLUMN sort_order INTEGER DEFAULT 0`);
+      await database.execAsync(`ALTER TABLE habits ADD COLUMN sort_order INTEGER DEFAULT 0`);
     } catch (e) {
       // Column already exists, ignore
     }
@@ -176,11 +166,12 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
       __DEV__ && console.warn('Building migration failed (non-fatal):', e);
     }
 
-    isInitializing = false;
-    return db;
+    // Only assign the module-level db once everything has succeeded
+    db = database;
+    return database;
   } catch (error) {
-    isInitializing = false;
-    initError = error as Error;
+    // Reset so callers can retry after a failure
+    initPromise = null;
     db = null;
     __DEV__ && console.error('Failed to initialize database:', error);
     throw error;
@@ -189,16 +180,11 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 
 export function resetDatabase(): void {
   db = null;
-  initError = null;
-  isInitializing = false;
+  initPromise = null;
 }
 
 export function isDatabaseAvailable(): boolean {
-  return db !== null && initError === null;
-}
-
-export function getDatabaseError(): Error | null {
-  return initError;
+  return db !== null;
 }
 
 export function generateUUID(): string {

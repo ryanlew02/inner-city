@@ -31,7 +31,11 @@
       "Bash(del:*)",
       "Bash(echo:*)",
       "Bash(test:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(grep -n \"useFonts\" /Users/ryanl/Documents/inner-city/node_modules/expo-font/build/index.d.ts 2>/dev/null || grep -rn \"export.*useFonts\" /Users/ryanl/Documents/inner-city/node_modules/expo-font/build/ 2>/dev/null | head -5)",
+      "Bash(git -C /Users/ryanl/Documents/inner-city show --stat 9dbbf96 8a16559 | head -60)",
+      "Bash(grep -r \"useAudioPlayer\" /Users/ryanl/Documents/inner-city/node_modules/expo-audio/build/ --include=\"*.d.ts\" -l 2>/dev/null | head -3)"
     ]
   }
 }
