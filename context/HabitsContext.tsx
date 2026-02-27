@@ -179,11 +179,13 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   };
 
   async function loadData() {
+    console.log('[DEBUG] HabitsContext: loadData start');
     try {
       const [loadedHabits, loadedEntries] = await Promise.all([
         getAllHabits(),
         getEntriesForDate(currentDate),
       ]);
+      console.log('[DEBUG] HabitsContext: db loaded', loadedHabits.length, 'habits');
       setHabits(loadedHabits);
 
       const entriesMap = new Map<string, HabitEntry>();
@@ -196,13 +198,14 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       const yesterday = getYesterday(currentDate);
       await awardQuitHabitCoins(yesterday, loadedHabits);
     } catch (error) {
-      __DEV__ && console.error('Failed to load habits data, using in-memory fallback:', error);
+      console.error('[DEBUG] HabitsContext: loadData ERROR:', error);
       useInMemory.current = true;
       Alert.alert(
         'Data Error',
         'Unable to load your saved data. Changes made this session will not be saved. Try restarting the app.',
       );
     } finally {
+      console.log('[DEBUG] HabitsContext: setLoading(false)');
       setLoading(false);
     }
   }

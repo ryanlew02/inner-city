@@ -70,21 +70,24 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function loadData() {
+    console.log('[DEBUG] BuildingContext: loadData start');
     try {
       const [loadedBuildings, loadedTokens] = await Promise.all([
         getPlacedBuildings(),
         getTokenCount(),
       ]);
+      console.log('[DEBUG] BuildingContext: db loaded', loadedBuildings.length, 'buildings');
       updateBuildings(loadedBuildings);
       setTokens(loadedTokens);
     } catch (error) {
-      __DEV__ && console.error('Failed to load building data, using in-memory fallback:', error);
+      console.error('[DEBUG] BuildingContext: loadData ERROR:', error);
       useInMemory.current = true;
       Alert.alert(
         'Data Error',
         'Unable to load your city data. Changes made this session will not be saved. Try restarting the app.',
       );
     } finally {
+      console.log('[DEBUG] BuildingContext: setLoading(false)');
       setLoading(false);
     }
   }

@@ -62,8 +62,10 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    console.log('[DEBUG] splash check:', { habitsLoading, buildingLoading, fontsLoaded, fontError: !!fontError, fontTimeout });
     if (!habitsLoading && !buildingLoading && (fontsLoaded || fontError || fontTimeout)) {
-      SplashScreen.hideAsync().catch((e) => { __DEV__ && console.warn('SplashScreen.hideAsync failed:', e); });
+      console.log('[DEBUG] hiding splash screen');
+      SplashScreen.hideAsync().catch((e) => { console.warn('SplashScreen.hideAsync failed:', e); });
     }
   }, [habitsLoading, buildingLoading, fontsLoaded, fontError, fontTimeout]);
 

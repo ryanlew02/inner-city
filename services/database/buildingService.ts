@@ -259,8 +259,8 @@ function oldPlotIndexToPosition(plotIndex: number, gridRows: number, gridCols: n
 }
 
 // Migrate existing buildings from plot_index to grid_row/grid_col
-export async function migrateToGridCoordinates(): Promise<void> {
-  const db = await getDatabase();
+export async function migrateToGridCoordinates(dbInstance?: import('expo-sqlite').SQLiteDatabase): Promise<void> {
+  const db = dbInstance ?? await getDatabase();
 
   // Check if migration is needed (grid_row column has NULL values)
   const needsMigration = await db.getFirstAsync<{ cnt: number }>(
