@@ -16,8 +16,8 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-g
 import { runOnJS } from "react-native-reanimated";
 import { ThemeColors } from "../constants/Colors";
 import { useHabits } from "../context/HabitsContext";
-import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useTheme } from "../context/ThemeContext";
 import { Habit, parseScheduleJson } from "../types/habit";
 
 const MIN_SWIPE_CHECK_PX = 40;
