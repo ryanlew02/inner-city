@@ -71,25 +71,21 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function loadData() {
-    console.log('[DEBUG] BuildingContext: loadData start');
     try {
       await migrateToGridCoordinates();
       const [loadedBuildings, loadedTokens] = await Promise.all([
         getPlacedBuildings(),
         getTokenCount(),
       ]);
-      console.log('[DEBUG] BuildingContext: db loaded', loadedBuildings.length, 'buildings');
       updateBuildings(loadedBuildings);
       setTokens(loadedTokens);
     } catch (error) {
-      console.error('[DEBUG] BuildingContext: loadData ERROR:', error);
       useInMemory.current = true;
       Alert.alert(
         'Data Error',
         'Unable to load your city data. Changes made this session will not be saved. Try restarting the app.',
       );
     } finally {
-      console.log('[DEBUG] BuildingContext: setLoading(false)');
       setLoading(false);
     }
   }
