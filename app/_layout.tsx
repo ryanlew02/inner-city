@@ -1,8 +1,6 @@
 import { Stack } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useState } from "react";
-import { StatusBar, Text, TextInput } from "react-native";
-import "react-native-reanimated";
+import { useEffect } from "react";
+import { ActivityIndicator, StatusBar, Text, TextInput, View } from "react-native";
 import { useFonts } from "expo-font";
 import {
   Nunito_300Light,
@@ -29,8 +27,6 @@ export const unstable_settings = {
   initialRouteName: "drawer",
 };
 
-SplashScreen.preventAutoHideAsync();
-
 function ThemedStatusBar() {
   const { theme } = useTheme();
   return (
@@ -53,26 +49,23 @@ function AppContent() {
     Nunito_700Bold,
     Nunito_800ExtraBold,
   });
-  const [fontTimeout, setFontTimeout] = useState(false);
 
-  // Safety valve: never let font loading block the splash screen forever
-  useEffect(() => {
-    const timer = setTimeout(() => setFontTimeout(true), 4000);
-    return () => clearTimeout(timer);
-  }, []);
+  const dataLoading = habitsLoading || buildingLoading;
+  const fontsReady = fontsLoaded || !!fontError;
 
-  useEffect(() => {
-    console.log('[DEBUG] splash check:', { habitsLoading, buildingLoading, fontsLoaded, fontError: !!fontError, fontTimeout });
-    if (!habitsLoading && !buildingLoading && (fontsLoaded || fontError || fontTimeout)) {
-      console.log('[DEBUG] hiding splash screen');
-      SplashScreen.hideAsync().catch((e) => { console.warn('SplashScreen.hideAsync failed:', e); });
-    }
-  }, [habitsLoading, buildingLoading, fontsLoaded, fontError, fontTimeout]);
+  if (dataLoading || !fontsReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#121218', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator color="#ffffff" />
+      </View>
+    );
+  }
 
   return (
     <>
       <ThemedStatusBar />
       <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
         <Stack.Screen name="drawer" />
         <Stack.Screen
           name="habit-form"

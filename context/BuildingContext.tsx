@@ -14,6 +14,7 @@ import {
   getUpgradeCost,
   MAX_TIER,
   MAX_VARIANTS,
+  migrateToGridCoordinates,
   placeBuilding as placeBuildingDb,
   PlacedBuilding,
   PURCHASABLE_BUILDING_TYPES,
@@ -72,6 +73,7 @@ export function BuildingProvider({ children }: { children: ReactNode }) {
   async function loadData() {
     console.log('[DEBUG] BuildingContext: loadData start');
     try {
+      await migrateToGridCoordinates();
       const [loadedBuildings, loadedTokens] = await Promise.all([
         getPlacedBuildings(),
         getTokenCount(),

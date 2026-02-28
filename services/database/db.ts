@@ -158,14 +158,6 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
       // Column already exists, ignore
     }
 
-    // Migrate existing buildings from plot_index to grid_row/grid_col
-    try {
-      const { migrateToGridCoordinates } = require('./buildingService');
-      await migrateToGridCoordinates(database);
-    } catch (e) {
-      __DEV__ && console.warn('Building migration failed (non-fatal):', e);
-    }
-
     // Only assign the module-level db once everything has succeeded
     db = database;
     return database;
