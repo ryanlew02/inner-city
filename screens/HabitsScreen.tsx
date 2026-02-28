@@ -580,7 +580,7 @@ export default function HabitsScreen() {
   const [swipeProgress, setSwipeProgress] = useState<{ habitId: string; translationX: number } | null>(null);
 
   const handleHabitPress = (habit: Habit) => {
-    if (!isScheduledForViewingDate(habit.id)) return;
+    if (isViewingToday && !isScheduledForViewingDate(habit.id)) return;
     if (habit.target_type === "check") {
       toggleHabit(habit.id);
     } else {
@@ -676,7 +676,7 @@ export default function HabitsScreen() {
     const habit = habits.find((h) => h.id === habitId);
     if (!habit) return;
     setSwipeProgress(null);
-    if (!isScheduledForViewingDate(habitId)) return;
+    if (isViewingToday && !isScheduledForViewingDate(habitId)) return;
     if (habit.target_type === "check") {
       if (translationX >= MIN_SWIPE_CHECK_PX) toggleHabit(habitId);
       return;
@@ -792,7 +792,7 @@ export default function HabitsScreen() {
         ) : (
           habits.map((habit, index) => {
             const completed = isHabitCompleted(habit.id);
-            const isScheduledForDay = isScheduledForViewingDate(habit.id);
+            const isScheduledForDay = isViewingToday ? isScheduledForViewingDate(habit.id) : true;
             const isSwipingThis = !editMode && swipeProgress?.habitId === habit.id;
             const tx = isSwipingThis ? swipeProgress.translationX : 0;
             const { increment: swipeIncrement, previewValue: swipePreviewValue } = isSwipingThis
@@ -1032,9 +1032,35 @@ export default function HabitsScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.progressUnitLabel}>
-              {selectedHabit?.target_type === "minutes" ? t('habits.minutes') : selectedHabit?.target_type === "hours" ? t('habits.hours') : t('habits.times')}
-            </Text>
+            <View style={styles.quickButtonRow}>
+              <TouchableOpacity
+                style={styles.quickButton}
+                onPress={() => {
+                  const current = parseInt(progressValue) || 0;
+                  setProgressValue(Math.max(0, current - 5).toString());
+                }}
+              >
+                <Text style={styles.quickButtonText}>-5</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickButton}
+                onPress={() => {
+                  const current = parseInt(progressValue) || 0;
+                  setProgressValue((current + 5).toString());
+                }}
+              >
+                <Text style={styles.quickButtonText}>+5</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickButton}
+                onPress={() => {
+                  const current = parseInt(progressValue) || 0;
+                  setProgressValue((current + 15).toString());
+                }}
+              >
+                <Text style={styles.quickButtonText}>+15</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.buttonRow}>
               <TouchableOpacity style={styles.cancelButton} onPress={handleProgressCancel}>
@@ -1673,9 +1699,10 @@ function createStyles(colors: ThemeColors) {
     progressModalContent: {
       backgroundColor: colors.card,
       borderRadius: 20,
-      padding: 24,
-      width: "85%" as const,
-      maxWidth: 340,
+      paddingVertical: 24,
+      paddingHorizontal: 48,
+      width: "88%" as const,
+      maxWidth: 360,
       alignItems: "center" as const,
     },
     progressModalTitle: {
@@ -1721,7 +1748,25 @@ function createStyles(colors: ThemeColors) {
       fontSize: 14,
       color: colors.textTertiary,
       marginTop: 8,
-      marginBottom: 24,
+      marginBottom: 16,
+    },
+    quickButtonRow: {
+      flexDirection: "row" as const,
+      gap: 8,
+      marginTop: 12,
+      marginBottom: 16,
+    },
+    quickButton: {
+      paddingHorizontal: 18,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.buttonBackground,
+      alignItems: "center" as const,
+    },
+    quickButtonText: {
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: colors.text,
     },
     buttonRow: {
       flexDirection: "row" as const,

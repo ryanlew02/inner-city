@@ -211,11 +211,14 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     const habit = habits.find(h => h.id === habitId);
     if (!habit) return false;
 
-    // Don't count dates before the habit was created
-    const viewingDateObj = new Date(viewingDate + 'T00:00:00');
-    const createdDate = new Date(habit.created_at);
-    createdDate.setHours(0, 0, 0, 0);
-    if (viewingDateObj < createdDate) return false;
+    // Don't count dates before the habit was created — but only when there's no explicit entry.
+    // If the user retroactively logged an entry, always honor it.
+    if (!entry) {
+      const viewingDateObj = new Date(viewingDate + 'T00:00:00');
+      const createdDate = new Date(habit.created_at);
+      createdDate.setHours(0, 0, 0, 0);
+      if (viewingDateObj < createdDate) return false;
+    }
 
     const scheduleData = parseScheduleJson(habit.schedule_json);
     const isQuitHabit = scheduleData.habit_mode === 'quit';
