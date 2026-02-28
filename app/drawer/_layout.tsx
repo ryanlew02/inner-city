@@ -16,6 +16,7 @@ export default function DrawerLayout() {
           drawerStyle: { backgroundColor: colors.drawerBackground, width: '65%' },
           headerStyle: { backgroundColor: colors.headerBackground },
           headerTintColor: colors.text,
+          headerTitle: () => null,
           drawerActiveTintColor: colors.drawerActiveText,
           drawerInactiveTintColor: colors.drawerInactiveText,
           swipeEnabled: false,

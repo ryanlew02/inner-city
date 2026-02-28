@@ -418,15 +418,17 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
       delayLongPress={500}
       activeOpacity={0.7}
     >
-      <View
-        style={[
-          styles.progressFill,
-          {
-            backgroundColor: isQuitFailed ? `${colors.textTertiary}30` : `${color}30`,
-            width: `${progressPercent}%`,
-          },
-        ]}
-      />
+      {!completed && (
+        <View
+          style={[
+            styles.progressFill,
+            {
+              backgroundColor: isQuitFailed ? `${colors.textTertiary}30` : `${color}30`,
+              width: `${progressPercent}%`,
+            },
+          ]}
+        />
+      )}
       {isSwiping && (
         <View
           style={[
@@ -475,17 +477,18 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
         </View>
         {!isScheduledToday ? (
           <Text style={styles.notScheduledText}>{tHabit('habits.notScheduled')}</Text>
-        ) : habit.target_type !== "check" ? (
-          <Text style={[styles.habitProgress, isQuitFailed && styles.habitProgressFailed]}>
-            {currentValue} / {habit.target_value} {getUnitLabel()}
-            {isQuitFailed ? ` (${tHabit('habits.limitExceeded')})` : isQuitHabit ? ` (${tHabit('habits.limit')})` : ''}
-          </Text>
-        ) : habit.description ? (
+        ) : habit.target_type === "check" && habit.description ? (
           <Text style={styles.habitDescription} numberOfLines={1}>
             {habit.description}
           </Text>
         ) : null}
       </View>
+      {isScheduledToday && habit.target_type !== "check" && (
+        <Text style={[styles.habitProgress, isQuitFailed && styles.habitProgressFailed]}>
+          {currentValue} / {habit.target_value} {getUnitLabel()}
+          {isQuitFailed ? ` (${tHabit('habits.limitExceeded')})` : isQuitHabit ? ` (${tHabit('habits.limit')})` : ''}
+        </Text>
+      )}
       {progressLabel !== null && (
         <View style={[styles.swipeFeedback, { backgroundColor: habit.color ? `${habit.color}99` : `${colors.success}99` }]}>
           <Text style={styles.swipeFeedbackText}>{progressLabel}</Text>
@@ -1429,9 +1432,11 @@ function createStyles(colors: ThemeColors) {
     },
     habitProgress: {
       fontSize: 13,
-      color: colors.textSecondary,
-      marginTop: 2,
+      color: colors.text,
       fontWeight: "500" as const,
+      marginLeft: 8,
+      flexShrink: 0,
+      alignSelf: 'center',
     },
     completedBanner: {
       backgroundColor: colors.success,
