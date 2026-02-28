@@ -536,7 +536,12 @@ export default function HabitFormScreen() {
           setShowCustomColorPicker(false);
         }}
       >
-        <View style={styles.modalOverlay}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => { setColorPickerModalVisible(false); setShowCustomColorPicker(false); }}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('habitForm.chooseColor')}</Text>
@@ -621,7 +626,8 @@ export default function HabitFormScreen() {
               )}
             </ScrollView>
           </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Schedule Picker Modal */}
@@ -631,7 +637,12 @@ export default function HabitFormScreen() {
         visible={scheduleModalVisible}
         onRequestClose={() => setScheduleModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setScheduleModalVisible(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('habitForm.scheduleTitle')}</Text>
@@ -828,7 +839,8 @@ export default function HabitFormScreen() {
               </View>
             </ScrollView>
           </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );

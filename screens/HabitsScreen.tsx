@@ -20,7 +20,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { Habit, parseScheduleJson } from "../types/habit";
 
-const MIN_SWIPE_CHECK_PX = 40;
+const MIN_SWIPE_CHECK_PX = 20;
 const FULL_SWIPE_PX = 200;
 const FLICK_VELOCITY_THRESHOLD = 300;
 const FLICK_MIN_RATIO = 0.15;
@@ -324,22 +324,34 @@ type RightSwipeGestureWrapperProps = {
   habit: Habit;
   onSwipeMoveRef: React.MutableRefObject<(habitId: string, tx: number) => void>;
   onSwipeEndRef: React.MutableRefObject<(habitId: string, tx: number, velocityX: number) => void>;
+  onTap: () => void;
+  onLongPress: () => void;
   children: React.ReactNode;
 };
 
-function RightSwipeGestureWrapper({ habit, onSwipeMoveRef, onSwipeEndRef, children }: RightSwipeGestureWrapperProps) {
+function RightSwipeGestureWrapper({ habit, onSwipeMoveRef, onSwipeEndRef, onTap, onLongPress, children }: RightSwipeGestureWrapperProps) {
   const habitId = habit.id;
   const habitIdRef = useRef(habitId);
   habitIdRef.current = habitId;
-  const panGesture = useMemo(() => {
+  const onTapRef = useRef(onTap);
+  onTapRef.current = onTap;
+  const onLongPressRef = useRef(onLongPress);
+  onLongPressRef.current = onLongPress;
+
+  const gesture = useMemo(() => {
     const reportMove = (tx: number) => onSwipeMoveRef.current(habitIdRef.current, tx);
     const reportEnd = (tx: number, vx: number) => onSwipeEndRef.current(habitIdRef.current, tx, vx);
-    return Gesture.Pan()
-      .activeOffsetX([10, Infinity])
-      .failOffsetY([-20, 20])
+    const handleTap = () => onTapRef.current();
+    const handleLongPress = () => onLongPressRef.current();
+
+    const pan = Gesture.Pan()
+      .activeOffsetX([-Infinity, 5])
+      .failOffsetY([-15, 15])
       .onUpdate((e) => {
         "worklet";
-        runOnJS(reportMove)(e.translationX);
+        if (e.translationX > 0) {
+          runOnJS(reportMove)(e.translationX);
+        }
       })
       .onEnd((e) => {
         "worklet";
@@ -349,11 +361,27 @@ function RightSwipeGestureWrapper({ habit, onSwipeMoveRef, onSwipeEndRef, childr
         "worklet";
         runOnJS(reportEnd)(0, 0);
       });
+
+    const tap = Gesture.Tap()
+      .maxDistance(10)
+      .onEnd(() => {
+        "worklet";
+        runOnJS(handleTap)();
+      });
+
+    const longPress = Gesture.LongPress()
+      .minDuration(500)
+      .onStart(() => {
+        "worklet";
+        runOnJS(handleLongPress)();
+      });
+
+    return Gesture.Race(pan, longPress, tap);
   }, [habitId, onSwipeMoveRef, onSwipeEndRef]);
 
   return (
-    <GestureDetector gesture={panGesture}>
-      <View style={{ flex: 1, minHeight: 0 }}>{children}</View>
+    <GestureDetector gesture={gesture}>
+      <View style={{ width: '100%' }}>{children}</View>
     </GestureDetector>
   );
 }
@@ -406,17 +434,13 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
   const color = habit.color || colors.success;
 
   return (
-    <TouchableOpacity
+    <View
       style={[
         styles.habitItem,
         { borderLeftColor: isQuitFailed ? colors.textTertiary : color },
         !isScheduledToday && styles.habitItemDimmed,
         isQuitFailed && styles.habitItemFailed,
       ]}
-      onPress={onTap}
-      onLongPress={onLongPress}
-      delayLongPress={500}
-      activeOpacity={0.7}
     >
       {!completed && (
         <View
@@ -494,7 +518,7 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
           <Text style={styles.swipeFeedbackText}>{progressLabel}</Text>
         </View>
       )}
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -576,6 +600,14 @@ export default function HabitsScreen() {
   };
 
   const handleProgressCancel = () => {
+    setProgressModalVisible(false);
+    setSelectedHabit(null);
+    setProgressValue("");
+  };
+
+  const handleProgressReset = async () => {
+    if (!selectedHabit) return;
+    await updateEntryValue(selectedHabit.id, 0);
     setProgressModalVisible(false);
     setSelectedHabit(null);
     setProgressValue("");
@@ -807,14 +839,16 @@ export default function HabitsScreen() {
                 habit={habit}
                 onSwipeMoveRef={setSwipeProgressRef}
                 onSwipeEndRef={applySwipeProgressRef}
+                onTap={() => handleHabitPress(habit)}
+                onLongPress={() => handleOpenOptions(habit)}
               >
                 <HabitTile
                   habit={habit}
                   completed={completed}
                   currentValue={getEntryValue(habit.id)}
                   isScheduledToday={isScheduledForDay}
-                  onTap={() => handleHabitPress(habit)}
-                  onLongPress={() => handleOpenOptions(habit)}
+                  onTap={() => {}}
+                  onLongPress={() => {}}
                   swipeIncrement={swipeIncrement}
                   swipePreviewValue={isSwipingThis ? swipePreviewValue : null}
                   colors={colors}
@@ -949,10 +983,15 @@ export default function HabitsScreen() {
         visible={progressModalVisible}
         onRequestClose={handleProgressCancel}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        <TouchableOpacity
           style={styles.progressModalOverlay}
+          activeOpacity={1}
+          onPress={handleProgressCancel}
         >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
           <View style={styles.progressModalContent}>
             <Text style={styles.progressModalTitle}>
               {selectedHabit?.icon} {selectedHabit?.name}
@@ -1005,8 +1044,13 @@ export default function HabitsScreen() {
                 <Text style={styles.saveButtonText}>{t('habits.save')}</Text>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity style={styles.resetButton} onPress={handleProgressReset}>
+              <Text style={styles.resetButtonText}>Reset for today</Text>
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+          </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
     </GestureHandlerRootView>
   );
@@ -1707,6 +1751,18 @@ function createStyles(colors: ThemeColors) {
       fontSize: 16,
       fontWeight: "600" as const,
       color: colors.textInverse,
+    },
+    resetButton: {
+      width: "100%" as const,
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: "center" as const,
+      marginTop: 8,
+    },
+    resetButtonText: {
+      fontSize: 14,
+      fontWeight: "500" as const,
+      color: colors.danger,
     },
   };
 }
