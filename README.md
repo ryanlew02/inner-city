@@ -11,16 +11,18 @@ All data is stored locally on your device. No accounts, no internet required, no
 ## Features
 
 ### Habit Tracking
+
 - **Two habit types**: Check habits (done/not done) and progress habits (numeric targets like minutes or reps)
 - **Two modes**:
   - **Build** — earn coins when you complete a habit
-  - **Quit** — earn coins for each day you *don't* do something
+  - **Quit** — earn coins for each day you _don't_ do something
 - **Flexible scheduling**: Daily, weekly (specific days), or custom (specific days of the month)
 - **Swipe gestures**: Swipe right to increment progress, flick to complete
 - **Date navigation**: Browse back through your history with a calendar picker
 - **Color-coded habits**: Assign a custom color to each habit
 
 ### City Building
+
 - **Isometric grid** rendered with tile-based sprites
 - **5 building types**: Houses (6 color variants, up to 4 tiers), Apartments, Offices, Factories, Solar Panels
 - **Gesture controls**:
@@ -34,12 +36,14 @@ All data is stored locally on your device. No accounts, no internet required, no
 - Buildings cost 3 coins each
 
 ### Statistics
+
 - **Overview**: Streaks, completion rates, and per-habit breakdowns
 - **Weekly view**: Color-coded 7-day completion grid
 - **Monthly view**: Full calendar with daily completion status
 - **Yearly view**: Heatmap of your entire year at a glance
 
 ### Other
+
 - **Dark and light themes**
 - **10 languages**: English, Spanish, French, Chinese, Hindi, Arabic, Portuguese, Russian, Japanese, Korean
 - **Sound effects** (toggleable)
@@ -48,17 +52,17 @@ All data is stored locally on your device. No accounts, no internet required, no
 
 ## Tech Stack
 
-| Category | Library |
-|---|---|
-| Framework | Expo (React Native) with Expo Router |
-| Language | TypeScript |
-| Database | expo-sqlite (local SQLite) |
-| Animations | React Native Reanimated |
-| Gestures | React Native Gesture Handler |
-| Navigation | React Navigation (Drawer) |
-| Audio | expo-av |
-| Notifications | expo-notifications |
-| Localization | expo-localization + i18n-js |
+| Category      | Library                              |
+| ------------- | ------------------------------------ |
+| Framework     | Expo (React Native) with Expo Router |
+| Language      | TypeScript                           |
+| Database      | expo-sqlite (local SQLite)           |
+| Animations    | React Native Reanimated              |
+| Gestures      | React Native Gesture Handler         |
+| Navigation    | React Navigation (Drawer)            |
+| Audio         | expo-av                              |
+| Notifications | expo-notifications                   |
+| Localization  | expo-localization + i18n-js          |
 
 ## Project Structure
 
@@ -103,10 +107,9 @@ Requires Node.js and the Expo CLI. For device builds, you'll need Android Studio
 
 ## Privacy
 
-Inner City does not collect analytics, use ads, or require a login. All habit and city data lives in a local SQLite database on your device and never leaves it.
+Inner City does not collect analytics, use ads, or require a login. All habit and city data lives in a local SQLite database on your device and never leaves it. If you want your data deleted, you can simply delete the app.
 
 ## Platform Support
 
 - Android
 - iOS (phone only, tablets not supported)
-- Web (limited gesture support)
