@@ -31,6 +31,7 @@
     "noHabitsHint": "点击 + 按钮创建你的第一个习惯",
     "allCompleted": "所有习惯都完成了！做得好！",
     "notScheduled": "今天未安排",
+    "notCreatedYet": "此习惯尚未创建",
     "limitExceeded": "超过限制",
     "limit": "限制",
     "quit": "戒除",

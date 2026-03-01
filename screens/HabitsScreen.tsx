@@ -391,6 +391,7 @@ type HabitTileProps = {
   completed: boolean;
   currentValue: number;
   isScheduledToday: boolean;
+  isBeforeCreation?: boolean;
   onTap: () => void;
   onLongPress: () => void;
   swipeIncrement?: number;
@@ -398,7 +399,7 @@ type HabitTileProps = {
   colors: ThemeColors;
 };
 
-function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, onLongPress, swipeIncrement = 0, swipePreviewValue = null, colors }: HabitTileProps) {
+function HabitTile({ habit, completed, currentValue, isScheduledToday, isBeforeCreation = false, onTap, onLongPress, swipeIncrement = 0, swipePreviewValue = null, colors }: HabitTileProps) {
   const { t: tHabit } = useLanguage();
   const styles = createStyles(colors);
   const isProgressType = habit.target_type !== "check";
@@ -438,7 +439,7 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
       style={[
         styles.habitItem,
         { borderLeftColor: isQuitFailed ? colors.textTertiary : color },
-        !isScheduledToday && styles.habitItemDimmed,
+        (!isScheduledToday || isBeforeCreation) && styles.habitItemDimmed,
         isQuitFailed && styles.habitItemFailed,
       ]}
     >
@@ -492,14 +493,16 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, onTap, on
               styles.habitText,
               isQuitFailed && styles.habitTextFailed,
               completed && !isQuitFailed && styles.habitTextCompleted,
-              !isScheduledToday && styles.habitTextDimmed,
+              (!isScheduledToday || isBeforeCreation) && styles.habitTextDimmed,
             ]}
           >
             {habit.name}
           </Text>
           {isQuitHabit && <View style={styles.quitBadge}><Text style={styles.quitBadgeText}>{tHabit('habits.quit')}</Text></View>}
         </View>
-        {!isScheduledToday ? (
+        {isBeforeCreation ? (
+          <Text style={styles.notScheduledText}>{tHabit('habits.notCreatedYet')}</Text>
+        ) : !isScheduledToday ? (
           <Text style={styles.notScheduledText}>{tHabit('habits.notScheduled')}</Text>
         ) : habit.target_type === "check" && habit.description ? (
           <Text style={styles.habitDescription} numberOfLines={1}>
@@ -579,7 +582,16 @@ export default function HabitsScreen() {
   // Right-swipe progress: distance → increment, shown live and applied on release
   const [swipeProgress, setSwipeProgress] = useState<{ habitId: string; translationX: number } | null>(null);
 
+  const isHabitBeforeCreation = (habit: Habit): boolean => {
+    if (isViewingToday) return false;
+    const viewingDateObj = new Date(viewingDate + 'T00:00:00');
+    const createdDate = new Date(habit.created_at);
+    createdDate.setHours(0, 0, 0, 0);
+    return viewingDateObj < createdDate;
+  };
+
   const handleHabitPress = (habit: Habit) => {
+    if (isHabitBeforeCreation(habit)) return;
     if (isViewingToday && !isScheduledForViewingDate(habit.id)) return;
     if (habit.target_type === "check") {
       toggleHabit(habit.id);
@@ -676,6 +688,7 @@ export default function HabitsScreen() {
     const habit = habits.find((h) => h.id === habitId);
     if (!habit) return;
     setSwipeProgress(null);
+    if (isHabitBeforeCreation(habit)) return;
     if (isViewingToday && !isScheduledForViewingDate(habitId)) return;
     if (habit.target_type === "check") {
       if (translationX >= MIN_SWIPE_CHECK_PX) toggleHabit(habitId);
@@ -692,7 +705,11 @@ export default function HabitsScreen() {
   };
 
   const setSwipeProgressRef = useRef((habitId: string, tx: number) => setSwipeProgress({ habitId, translationX: tx }));
-  setSwipeProgressRef.current = (habitId: string, tx: number) => setSwipeProgress({ habitId, translationX: tx });
+  setSwipeProgressRef.current = (habitId: string, tx: number) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (habit && isHabitBeforeCreation(habit)) return;
+    setSwipeProgress({ habitId, translationX: tx });
+  };
   const applySwipeProgressRef = useRef(applySwipeProgress);
   applySwipeProgressRef.current = applySwipeProgress;
 
@@ -793,6 +810,7 @@ export default function HabitsScreen() {
           habits.map((habit, index) => {
             const completed = isHabitCompleted(habit.id);
             const isScheduledForDay = isViewingToday ? isScheduledForViewingDate(habit.id) : true;
+            const beforeCreation = isHabitBeforeCreation(habit);
             const isSwipingThis = !editMode && swipeProgress?.habitId === habit.id;
             const tx = isSwipingThis ? swipeProgress.translationX : 0;
             const { increment: swipeIncrement, previewValue: swipePreviewValue } = isSwipingThis
@@ -824,6 +842,7 @@ export default function HabitsScreen() {
                       completed={completed}
                       currentValue={getEntryValue(habit.id)}
                       isScheduledToday={isScheduledForDay}
+                      isBeforeCreation={beforeCreation}
                       onTap={() => {}}
                       onLongPress={() => {}}
                       colors={colors}
@@ -847,6 +866,7 @@ export default function HabitsScreen() {
                   completed={completed}
                   currentValue={getEntryValue(habit.id)}
                   isScheduledToday={isScheduledForDay}
+                  isBeforeCreation={beforeCreation}
                   onTap={() => {}}
                   onLongPress={() => {}}
                   swipeIncrement={swipeIncrement}

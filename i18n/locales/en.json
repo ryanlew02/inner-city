@@ -31,6 +31,7 @@
     "noHabitsHint": "Tap the + button to create your first habit",
     "allCompleted": "All habits completed! Great job!",
     "notScheduled": "Not scheduled for today",
+    "notCreatedYet": "This habit was not created yet",
     "limitExceeded": "limit exceeded",
     "limit": "limit",
     "quit": "QUIT",

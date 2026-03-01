@@ -31,6 +31,7 @@
     "noHabitsHint": "Appuyez sur le bouton + pour créer votre première habitude",
     "allCompleted": "Toutes les habitudes complétées ! Excellent travail !",
     "notScheduled": "Pas prévu pour aujourd'hui",
+    "notCreatedYet": "Cette habitude n'existait pas encore",
     "limitExceeded": "limite dépassée",
     "limit": "limite",
     "quit": "ARRÊT",

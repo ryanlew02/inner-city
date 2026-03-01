@@ -82,6 +82,8 @@ function calcStreaks(
 ): { current: number; best: number } {
   const scheduleData = parseScheduleJson(habit.schedule_json);
   const today = new Date(todayStr + "T00:00:00");
+  const createdDate = new Date(habit.created_at);
+  createdDate.setHours(0, 0, 0, 0);
 
   let current = 0;
   let d = new Date(today);
@@ -89,14 +91,14 @@ function calcStreaks(
     const dateStr = formatDateStr(d);
     if (!isScheduledForDate(scheduleData, d)) {
       d.setDate(d.getDate() - 1);
-      if (d.getTime() < habit.created_at) break;
+      if (d < createdDate) break;
       continue;
     }
     const entry = entriesByDate.get(dateStr);
     if (isCompletedForDate(habit, entry)) {
       current++;
       d.setDate(d.getDate() - 1);
-      if (d.getTime() < habit.created_at) break;
+      if (d < createdDate) break;
     } else {
       break;
     }
@@ -104,8 +106,6 @@ function calcStreaks(
 
   let best = 0;
   let streak = 0;
-  const createdDate = new Date(habit.created_at);
-  createdDate.setHours(0, 0, 0, 0);
   d = new Date(createdDate);
   while (d <= today) {
     const dateStr = formatDateStr(d);

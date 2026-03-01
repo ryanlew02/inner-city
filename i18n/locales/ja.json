@@ -31,6 +31,7 @@
     "noHabitsHint": "+ボタンをタップして最初の習慣を作成",
     "allCompleted": "すべての習慣が完了しました！素晴らしい！",
     "notScheduled": "今日はスケジュールされていません",
+    "notCreatedYet": "この習慣はまだ作成されていませんでした",
     "limitExceeded": "上限を超えました",
     "limit": "上限",
     "quit": "やめる",
