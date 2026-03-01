@@ -105,3 +105,11 @@ export async function getTotalCompletedCount(): Promise<number> {
   );
   return result?.count ?? 0;
 }
+
+export async function getEntriesForDateRange(startDate: string, endDate: string): Promise<HabitEntry[]> {
+  const db = await getDatabase();
+  return db.getAllAsync<HabitEntry>(
+    'SELECT * FROM habit_entries WHERE date >= ? AND date <= ?',
+    [startDate, endDate]
+  );
+}

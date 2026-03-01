@@ -32,7 +32,7 @@ const MONTH_SHORT = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
-const WEEK_DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const WEEK_DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 // ─── Helpers ───
 
 function formatDateStr(d: Date): string {
@@ -85,6 +85,50 @@ function calcStreaks(
   const createdDate = new Date(habit.created_at);
   createdDate.setHours(0, 0, 0, 0);
 
+  const timesPerWeek = scheduleData.times_per_week;
+  if (timesPerWeek) {
+    const todayMonday = getSunday(today);
+    const createdMonday = getSunday(createdDate);
+
+    // Current streak: walk backwards through weeks
+    let current = 0;
+    let monday = new Date(todayMonday);
+    let skippedCurrentWeek = false;
+    while (monday >= createdMonday) {
+      const count = getWeekCompletionCount(habit, entriesByDate, monday, createdDate, today);
+      const isCurrent = formatDateStr(monday) === formatDateStr(todayMonday);
+      if (count >= timesPerWeek) {
+        current++;
+      } else if (isCurrent && !skippedCurrentWeek) {
+        skippedCurrentWeek = true; // In-progress week: skip without breaking streak
+      } else {
+        break; // Past incomplete week: streak broken
+      }
+      const prev = new Date(monday);
+      prev.setDate(monday.getDate() - 7);
+      monday = prev;
+    }
+
+    // Best streak: walk forward
+    let best = 0;
+    let streak = 0;
+    monday = new Date(createdMonday);
+    while (monday <= todayMonday) {
+      const count = getWeekCompletionCount(habit, entriesByDate, monday, createdDate, today);
+      const isCurrent = formatDateStr(monday) === formatDateStr(todayMonday);
+      if (count >= timesPerWeek) {
+        streak++;
+        if (streak > best) best = streak;
+      } else if (!isCurrent) {
+        streak = 0; // Past week incomplete: reset
+      }
+      const next = new Date(monday);
+      next.setDate(monday.getDate() + 7);
+      monday = next;
+    }
+    return { current, best };
+  }
+
   let current = 0;
   let d = new Date(today);
   while (true) {
@@ -133,6 +177,22 @@ function calcCompletionRate(
   endDate: Date
 ): { completed: number; scheduled: number; rate: number } {
   const scheduleData = parseScheduleJson(habit.schedule_json);
+  const timesPerWeek = scheduleData.times_per_week;
+  if (timesPerWeek) {
+    const createdDate = new Date(habit.created_at);
+    createdDate.setHours(0, 0, 0, 0);
+    const effectiveStart = startDate > createdDate ? startDate : createdDate;
+    let monday = getSunday(effectiveStart);
+    const endMonday = getSunday(endDate);
+    let completed = 0, scheduled = 0;
+    while (monday <= endMonday) {
+      scheduled++;
+      if (getWeekCompletionCount(habit, entriesByDate, monday, createdDate, endDate) >= timesPerWeek) completed++;
+      const next = new Date(monday); next.setDate(monday.getDate() + 7); monday = next;
+    }
+    const rate = scheduled > 0 ? Math.round((completed / scheduled) * 100) : 0;
+    return { completed, scheduled, rate };
+  }
   let completed = 0;
   let scheduled = 0;
   // Don't count dates before the habit was created
@@ -182,36 +242,53 @@ async function loadEntriesForRange(
 // ─── Week helpers ───
 
 /** Get the Monday of the week containing the given date. */
-function getMonday(d: Date): Date {
+function getSunday(d: Date): Date {
   const date = new Date(d);
   date.setHours(0, 0, 0, 0);
   const day = date.getDay(); // 0=Sun … 6=Sat
-  const diff = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + diff);
+  date.setDate(date.getDate() - day); // go back to Sunday
   return date;
 }
 
-/** Get the 7 dates of the week starting from Monday. */
-function getWeekDates(monday: Date): Date[] {
-  const dates: Date[] = [];
+function getWeekCompletionCount(
+  habit: Habit,
+  entriesByDate: Map<string, HabitEntry>,
+  monday: Date,
+  createdDate: Date,
+  today: Date
+): number {
+  let count = 0;
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
+    if (d < createdDate || d > today) continue;
+    const entry = entriesByDate.get(formatDateStr(d));
+    if (isCompletedForDate(habit, entry, d)) count++;
+  }
+  return count;
+}
+
+/** Get the 7 dates of the week starting from Sunday. */
+function getWeekDates(sunday: Date): Date[] {
+  const dates: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(sunday);
+    d.setDate(sunday.getDate() + i);
     dates.push(d);
   }
   return dates;
 }
 
-/** Format "Feb 3 – Feb 9, 2026" style label. */
-function formatWeekLabel(monday: Date): string {
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  const mStart = MONTH_SHORT[monday.getMonth()];
-  const dStart = monday.getDate();
-  const mEnd = MONTH_SHORT[sunday.getMonth()];
-  const dEnd = sunday.getDate();
-  const year = sunday.getFullYear();
-  if (monday.getMonth() === sunday.getMonth()) {
+/** Format "Feb 1 – Feb 7, 2026" style label (Sun–Sat). */
+function formatWeekLabel(sunday: Date): string {
+  const saturday = new Date(sunday);
+  saturday.setDate(sunday.getDate() + 6);
+  const mStart = MONTH_SHORT[sunday.getMonth()];
+  const dStart = sunday.getDate();
+  const mEnd = MONTH_SHORT[saturday.getMonth()];
+  const dEnd = saturday.getDate();
+  const year = saturday.getFullYear();
+  if (sunday.getMonth() === saturday.getMonth()) {
     return `${mStart} ${dStart} \u2013 ${dEnd}, ${year}`;
   }
   return `${mStart} ${dStart} \u2013 ${mEnd} ${dEnd}, ${year}`;
@@ -380,10 +457,10 @@ function WeekPickerModal({ visible, onClose, currentMonday, todayDate, onSelect,
                   const dateStr = formatDateStr(cellDate);
                   const isFuture = cellDate > todayDate;
                   const isToday = dateStr === todayStr;
-                  const cellMonday = getMonday(cellDate);
+                  const cellMonday = getSunday(cellDate);
                   const isInCurrentWeek = formatDateStr(cellMonday) === currentMondayStr;
                   return (
-                    <TouchableOpacity key={`d-${day}`} style={[ws.calCell, isInCurrentWeek && ws.selectedDayCell, isToday && ws.todayDayCell]} disabled={isFuture} onPress={() => { onSelect(getMonday(cellDate)); onClose(); }}>
+                    <TouchableOpacity key={`d-${day}`} style={[ws.calCell, isInCurrentWeek && ws.selectedDayCell, isToday && ws.todayDayCell]} disabled={isFuture} onPress={() => { onSelect(getSunday(cellDate)); onClose(); }}>
                       <Text style={[ws.calDayText, isToday && ws.todayDayText, isFuture && ws.futureDayText]}>{day}</Text>
                     </TouchableOpacity>
                   );
@@ -436,6 +513,22 @@ function MonthlyGrid({ habit, entriesByDate, todayStr, year, month, colors }: { 
   const lastRow = rows[rows.length - 1];
   while (lastRow.length < 7) lastRow.push(null);
   const scheduleData = parseScheduleJson(habit.schedule_json);
+  const timesPerWeek = scheduleData.times_per_week;
+  const completedWeekSet = new Set<string>();
+  if (timesPerWeek) {
+    const createdDate = new Date(habit.created_at);
+    createdDate.setHours(0, 0, 0, 0);
+    let monday = getSunday(new Date(year, month, 1));
+    const monthEnd = new Date(year, month + 1, 0);
+    while (monday <= monthEnd) {
+      if (getWeekCompletionCount(habit, entriesByDate, monday, createdDate, today) >= timesPerWeek) {
+        completedWeekSet.add(formatDateStr(monday));
+      }
+      const next = new Date(monday);
+      next.setDate(monday.getDate() + 7);
+      monday = next;
+    }
+  }
   return (
     <View>
       <View style={styles.monthCalRow}>
@@ -451,12 +544,14 @@ function MonthlyGrid({ habit, entriesByDate, todayStr, year, month, colors }: { 
             const isFuture = cellDate > today;
             const scheduled = isScheduledForDate(scheduleData, cellDate);
             const entry = entriesByDate.get(dateStr);
-            const completed = scheduled && isCompletedForDate(habit, entry, cellDate);
+            const completed = timesPerWeek
+              ? (!isFuture && (isCompletedForDate(habit, entry, cellDate) || completedWeekSet.has(formatDateStr(getSunday(cellDate)))))
+              : (scheduled && isCompletedForDate(habit, entry, cellDate));
             let bgColor = colors.cellDefault;
             let opacity = 1;
             if (isFuture) { bgColor = colors.cellDefault; opacity = 0.25; }
             else if (completed) { bgColor = habit.color; }
-            else if (!scheduled) { bgColor = colors.cellUnscheduled; }
+            else if (!timesPerWeek && !scheduled) { bgColor = colors.cellUnscheduled; }
             return (
               <View key={`day-${day}`} style={[{ width: cellSize, height: cellSize, margin: 2, borderRadius: 6, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: bgColor, opacity }, isToday && styles.todayCell]}>
                 <Text style={[styles.monthCalDayText, isToday && styles.monthCalTodayText]}>{day}</Text>
@@ -476,6 +571,22 @@ function YearlyGrid({ habit, entriesByDate, todayStr, year, colors }: { habit: H
   const startOfYear = new Date(year, 0, 1);
   const startDay = startOfYear.getDay();
   const scheduleData = parseScheduleJson(habit.schedule_json);
+  const timesPerWeek = scheduleData.times_per_week;
+  const completedWeekSet = new Set<string>();
+  if (timesPerWeek) {
+    const createdDate = new Date(habit.created_at);
+    createdDate.setHours(0, 0, 0, 0);
+    let monday = getSunday(new Date(year, 0, 1));
+    const yearEnd = new Date(year, 11, 31);
+    while (monday <= yearEnd) {
+      if (getWeekCompletionCount(habit, entriesByDate, monday, createdDate, today) >= timesPerWeek) {
+        completedWeekSet.add(formatDateStr(monday));
+      }
+      const next = new Date(monday);
+      next.setDate(monday.getDate() + 7);
+      monday = next;
+    }
+  }
   const weeks: (Date | null)[][] = [];
   let currentWeek: (Date | null)[] = [];
   for (let i = 0; i < startDay; i++) currentWeek.push(null);
@@ -500,12 +611,14 @@ function YearlyGrid({ habit, entriesByDate, todayStr, year, colors }: { habit: H
             const isFuture = cell > today;
             const scheduled = isScheduledForDate(scheduleData, cell);
             const entry = entriesByDate.get(dateStr);
-            const completed = scheduled && isCompletedForDate(habit, entry, cell);
+            const completed = timesPerWeek
+              ? (!isFuture && (isCompletedForDate(habit, entry, cell!) || completedWeekSet.has(formatDateStr(getSunday(cell!)))))
+              : (scheduled && isCompletedForDate(habit, entry, cell!));
             let bgColor = colors.cellDefault;
             let opacity = 1;
             if (isFuture) { opacity = 0.25; }
             else if (completed) { bgColor = habit.color; }
-            else if (!scheduled) { opacity = 0.35; }
+            else if (!timesPerWeek && !scheduled) { opacity = 0.35; }
             return <View key={wi} style={[styles.yearCell, { width: cellSize, height: cellSize, backgroundColor: bgColor, opacity }, isToday && styles.todayYearCell]} />;
           })}
         </View>
@@ -523,12 +636,45 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
   const year = today.getFullYear();
   const month = today.getMonth();
   const daysInMonth = getDaysInMonth(year, month);
+  const timesPerWeek = scheduleData.times_per_week;
+  const createdDate = new Date(habit.created_at);
+  createdDate.setHours(0, 0, 0, 0);
   let monthCompleted = 0;
-  for (let d = 1; d <= daysInMonth; d++) { const cellDate = new Date(year, month, d); if (cellDate > today) break; const dateStr = formatDateStr(cellDate); if (isScheduledForDate(scheduleData, cellDate)) { const entry = entriesByDate.get(dateStr); if (isCompletedForDate(habit, entry, cellDate)) monthCompleted++; } }
+  if (timesPerWeek) {
+    let monday = getSunday(new Date(year, month, 1));
+    const monthEnd = new Date(year, month + 1, 0);
+    while (monday <= monthEnd) {
+      if (getWeekCompletionCount(habit, entriesByDate, monday, createdDate, today) >= timesPerWeek) monthCompleted++;
+      const next = new Date(monday); next.setDate(monday.getDate() + 7); monday = next;
+    }
+  } else {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const cellDate = new Date(year, month, d);
+      if (cellDate > today) break;
+      const entry = entriesByDate.get(formatDateStr(cellDate));
+      const scheduled = isScheduledForDate(scheduleData, cellDate);
+      if (scheduled && isCompletedForDate(habit, entry, cellDate)) monthCompleted++;
+    }
+  }
   let yearCompleted = 0;
-  const startOfYear = new Date(year, 0, 1);
-  const iter = new Date(startOfYear);
-  while (iter <= today) { const dateStr = formatDateStr(iter); if (isScheduledForDate(scheduleData, iter)) { const entry = entriesByDate.get(dateStr); if (isCompletedForDate(habit, entry, iter)) yearCompleted++; } iter.setDate(iter.getDate() + 1); }
+  if (timesPerWeek) {
+    let monday = getSunday(new Date(year, 0, 1));
+    while (monday <= today) {
+      if (getWeekCompletionCount(habit, entriesByDate, monday, createdDate, today) >= timesPerWeek) yearCompleted++;
+      const next = new Date(monday); next.setDate(monday.getDate() + 7); monday = next;
+    }
+  } else {
+    for (let m = 0; m < 12; m++) {
+      const dInM = getDaysInMonth(year, m);
+      for (let d = 1; d <= dInM; d++) {
+        const cellDate = new Date(year, m, d);
+        if (cellDate > today) break;
+        const entry = entriesByDate.get(formatDateStr(cellDate));
+        const scheduled = isScheduledForDate(scheduleData, cellDate);
+        if (scheduled && isCompletedForDate(habit, entry, cellDate)) yearCompleted++;
+      }
+    }
+  }
   const modeLabel = scheduleData.habit_mode === "quit" ? tCard("stats.quitMode") : tCard("stats.build");
   return (
     <View style={styles.habitCard}>
@@ -545,7 +691,7 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
       <View style={styles.statsRow}>
         <StatBox label={tCard("stats.currentStreak")} value={String(streaks.current)} colors={colors} />
         <StatBox label={tCard("stats.bestStreak")} value={String(streaks.best)} colors={colors} />
-        <StatBox label={tCard("stats.thisMonth")} value={`${monthCompleted}/${daysInMonth}`} colors={colors} />
+        <StatBox label={tCard("stats.thisMonth")} value={timesPerWeek ? String(monthCompleted) : `${monthCompleted}/${daysInMonth}`} colors={colors} />
         <StatBox label={tCard("stats.thisYear")} value={String(yearCompleted)} colors={colors} />
       </View>
     </View>
@@ -580,12 +726,12 @@ export default function StatsScreen() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
 
   // Weekly state
-  const todayMonday = useMemo(() => getMonday(todayDate), [todayDate]);
-  const [weekStart, setWeekStart] = useState<Date>(() => getMonday(todayDate));
+  const todaySunday = useMemo(() => getSunday(todayDate), [todayDate]);
+  const [weekStart, setWeekStart] = useState<Date>(() => getSunday(todayDate));
   const [weekPickerVisible, setWeekPickerVisible] = useState(false);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
   const weekLabel = useMemo(() => formatWeekLabel(weekStart), [weekStart]);
-  const isCurrentWeek = formatDateStr(weekStart) === formatDateStr(todayMonday);
+  const isCurrentWeek = formatDateStr(weekStart) === formatDateStr(todaySunday);
 
   // Picker modals
   const [monthPickerVisible, setMonthPickerVisible] = useState(false);
@@ -634,9 +780,9 @@ export default function StatsScreen() {
     }
     setWeeklyLoading(true);
     const startStr = formatDateStr(weekStart);
-    const sunday = new Date(weekStart);
-    sunday.setDate(weekStart.getDate() + 6);
-    const endStr = formatDateStr(sunday);
+    const saturday = new Date(weekStart);
+    saturday.setDate(weekStart.getDate() + 6);
+    const endStr = formatDateStr(saturday);
     loadEntriesForRange(activeHabits, startStr, endStr).then((m) => {
       setWeeklyEntries(m);
       setWeeklyLoading(false);
@@ -872,6 +1018,12 @@ export default function StatsScreen() {
               {activeHabits.map((habit) => {
                 const entriesByDate = weeklyEntries.get(habit.id) || new Map();
                 const scheduleData = parseScheduleJson(habit.schedule_json);
+                const timesPerWeek = scheduleData.times_per_week;
+                const createdDate = new Date(habit.created_at);
+                createdDate.setHours(0, 0, 0, 0);
+                const weekGoalMet = timesPerWeek
+                  ? getWeekCompletionCount(habit, entriesByDate, weekStart, createdDate, todayDate) >= timesPerWeek
+                  : false;
                 return (
                   <View key={habit.id} style={styles.weekHabitRow}>
                     <View style={styles.weekHabitInfo}>
@@ -889,9 +1041,9 @@ export default function StatsScreen() {
                         const completed = scheduled && !isFuture && isCompletedForDate(habit, entry, d);
 
                         let bgColor: string;
-                        if (isFuture || !scheduled) {
+                        if (!scheduled) {
                           bgColor = colors.cellUnscheduled;
-                        } else if (completed) {
+                        } else if (!isFuture && (completed || weekGoalMet)) {
                           bgColor = habit.color;
                         } else {
                           bgColor = colors.cellDefault;

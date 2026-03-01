@@ -18,7 +18,18 @@ import { ThemeColors } from "../constants/Colors";
 import { useHabits } from "../context/HabitsContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
+import { getEntriesForDateRange } from "../services/database/entryService";
 import { Habit, parseScheduleJson } from "../types/habit";
+
+function getISOMonday(dateStr: string): Date {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+  return d;
+}
+function fmtDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const MIN_SWIPE_CHECK_PX = 20;
 const FULL_SWIPE_PX = 200;
@@ -396,10 +407,11 @@ type HabitTileProps = {
   onLongPress: () => void;
   swipeIncrement?: number;
   swipePreviewValue?: number | null;
+  weeklyCount?: number;
   colors: ThemeColors;
 };
 
-function HabitTile({ habit, completed, currentValue, isScheduledToday, isBeforeCreation = false, onTap, onLongPress, swipeIncrement = 0, swipePreviewValue = null, colors }: HabitTileProps) {
+function HabitTile({ habit, completed, currentValue, isScheduledToday, isBeforeCreation = false, onTap, onLongPress, swipeIncrement = 0, swipePreviewValue = null, weeklyCount, colors }: HabitTileProps) {
   const { t: tHabit } = useLanguage();
   const styles = createStyles(colors);
   const isProgressType = habit.target_type !== "check";
@@ -510,11 +522,27 @@ function HabitTile({ habit, completed, currentValue, isScheduledToday, isBeforeC
           </Text>
         ) : null}
       </View>
-      {isScheduledToday && habit.target_type !== "check" && (
-        <Text style={[styles.habitProgress, isQuitFailed && styles.habitProgressFailed]}>
-          {currentValue} / {habit.target_value} {getUnitLabel()}
-          {isQuitFailed ? ` (${tHabit('habits.limitExceeded')})` : isQuitHabit ? ` (${tHabit('habits.limit')})` : ''}
-        </Text>
+      {scheduleData.times_per_week ? (
+        <View style={styles.weeklyDots}>
+          {Array.from({ length: scheduleData.times_per_week }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.weeklyDot,
+                i < (weeklyCount ?? 0)
+                  ? { backgroundColor: color }
+                  : { backgroundColor: 'transparent', borderColor: color },
+              ]}
+            />
+          ))}
+        </View>
+      ) : (
+        isScheduledToday && habit.target_type !== "check" && (
+          <Text style={[styles.habitProgress, isQuitFailed && styles.habitProgressFailed]}>
+            {currentValue} / {habit.target_value} {getUnitLabel()}
+            {isQuitFailed ? ` (${tHabit('habits.limitExceeded')})` : isQuitHabit ? ` (${tHabit('habits.limit')})` : ''}
+          </Text>
+        )
       )}
       {progressLabel !== null && (
         <View style={[styles.swipeFeedback, { backgroundColor: habit.color ? `${habit.color}99` : `${colors.success}99` }]}>
@@ -553,6 +581,7 @@ export default function HabitsScreen() {
     reorderHabits,
     updateEntryValue,
     getEntryValue,
+    entries,
     loading,
     viewingDate,
     setViewingDate,
@@ -578,6 +607,37 @@ export default function HabitsScreen() {
   // Calendar modal state
   const [calendarVisible, setCalendarVisible] = useState(false);
 
+  // Weekly completions for times_per_week habits
+  const [weeklyCompletions, setWeeklyCompletions] = useState<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    const tpwHabits = habits.filter(h => {
+      const s = parseScheduleJson(h.schedule_json);
+      return (s.times_per_week ?? 0) > 0;
+    });
+    if (tpwHabits.length === 0) { setWeeklyCompletions(new Map()); return; }
+
+    const monday = getISOMonday(viewingDate);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    getEntriesForDateRange(fmtDate(monday), fmtDate(sunday)).then(allEntries => {
+      const counts = new Map<string, number>();
+      tpwHabits.forEach(h => {
+        const entryMap = new Map(allEntries.filter(e => e.habit_id === h.id).map(e => [e.date, e]));
+        let count = 0;
+        for (let i = 0; i < 7; i++) {
+          const day = new Date(monday);
+          day.setDate(monday.getDate() + i);
+          const entry = entryMap.get(fmtDate(day));
+          if (!entry) continue;
+          if (h.target_type === 'check' ? entry.value >= 1 : entry.value >= h.target_value) count++;
+        }
+        counts.set(h.id, count);
+      });
+      setWeeklyCompletions(counts);
+    });
+  }, [viewingDate, habits, entries]);
 
   // Right-swipe progress: distance → increment, shown live and applied on release
   const [swipeProgress, setSwipeProgress] = useState<{ habitId: string; translationX: number } | null>(null);
@@ -845,6 +905,7 @@ export default function HabitsScreen() {
                       isBeforeCreation={beforeCreation}
                       onTap={() => {}}
                       onLongPress={() => {}}
+                      weeklyCount={weeklyCompletions.get(habit.id) ?? 0}
                       colors={colors}
                     />
                   </View>
@@ -871,6 +932,7 @@ export default function HabitsScreen() {
                   onLongPress={() => {}}
                   swipeIncrement={swipeIncrement}
                   swipePreviewValue={isSwipingThis ? swipePreviewValue : null}
+                  weeklyCount={weeklyCompletions.get(habit.id) ?? 0}
                   colors={colors}
                 />
               </RightSwipeGestureWrapper>
@@ -1828,6 +1890,18 @@ function createStyles(colors: ThemeColors) {
       fontSize: 14,
       fontWeight: "500" as const,
       color: colors.danger,
+    },
+    weeklyDots: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 4,
+      paddingHorizontal: 8,
+    },
+    weeklyDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      borderWidth: 1.5,
     },
   };
 }

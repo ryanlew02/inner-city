@@ -107,7 +107,7 @@ Requires Node.js and the Expo CLI. For device builds, you'll need Android Studio
 
 ## Privacy
 
-Inner City does not collect analytics, use ads, or require a login. All habit and city data lives in a local SQLite database on your device and never leaves it. If you want your data deleted, you can simply delete the app.
+Inner City does not collect analytics, use ads, or require a login. All habit and city data lives in a local SQLite database on your device and never leaves it. 
 
 ## Platform Support
 

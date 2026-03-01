@@ -7,8 +7,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useHabits } from "../context/HabitsContext";
 import { useTheme } from "../context/ThemeContext";
@@ -83,6 +85,8 @@ export default function HabitFormScreen() {
   const { habits, addHabit, updateHabit } = useHabits();
   const { colors } = useTheme();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const styles = createStyles(colors);
 
   const editingHabitId = params.habitId || null;
@@ -537,12 +541,14 @@ export default function HabitFormScreen() {
         }}
       >
         <TouchableOpacity
-          style={styles.modalOverlay}
+          style={[styles.modalOverlay, { width: screenWidth, height: screenHeight }]}
           activeOpacity={1}
           onPress={() => { setColorPickerModalVisible(false); setShowCustomColorPicker(false); }}
         >
-          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.modalContent}>
+          <View
+            style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 20) }]}
+            onStartShouldSetResponder={() => true}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('habitForm.chooseColor')}</Text>
               <TouchableOpacity
@@ -626,7 +632,6 @@ export default function HabitFormScreen() {
               )}
             </ScrollView>
           </View>
-          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
@@ -638,12 +643,14 @@ export default function HabitFormScreen() {
         onRequestClose={() => setScheduleModalVisible(false)}
       >
         <TouchableOpacity
-          style={styles.modalOverlay}
+          style={[styles.modalOverlay, { width: screenWidth, height: screenHeight }]}
           activeOpacity={1}
           onPress={() => setScheduleModalVisible(false)}
         >
-          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.modalContent}>
+          <View
+            style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 20) }]}
+            onStartShouldSetResponder={() => true}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('habitForm.scheduleTitle')}</Text>
               <TouchableOpacity
@@ -839,7 +846,6 @@ export default function HabitFormScreen() {
               </View>
             </ScrollView>
           </View>
-          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </View>
@@ -1050,7 +1056,6 @@ function createStyles(colors: ThemeColors) {
     },
     // Modal styles
     modalOverlay: {
-      flex: 1,
       backgroundColor: colors.overlay,
       justifyContent: "flex-end" as const,
     },
