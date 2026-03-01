@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useMemo, useCallback, useRef, useState, memo } from "react";
 import { Image, ImageSourcePropType, Modal, Text, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -571,8 +572,32 @@ function getIsoBounds(rows: number, cols: number) {
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.0;
 
+function SkyLight({ theme }: { theme: 'light' | 'dark' }) {
+  if (theme === 'light') {
+    // Sun: warm yellow core with two glow rings
+    return (
+      <View style={{ position: 'absolute', top: 28, right: 44, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ position: 'absolute', width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255,210,30,0.10)' }} />
+        <View style={{ position: 'absolute', width: 82, height: 82, borderRadius: 41, backgroundColor: 'rgba(255,210,0,0.22)' }} />
+        <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#FFE44D' }} />
+      </View>
+    );
+  }
+  // Moon: pale blue-white body with crescent shadow + soft glow rings
+  return (
+    <View style={{ position: 'absolute', top: 30, right: 48, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ position: 'absolute', width: 96, height: 96, borderRadius: 48, backgroundColor: 'rgba(180,215,255,0.05)' }} />
+      <View style={{ position: 'absolute', width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(180,215,255,0.10)' }} />
+      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#D6EAFF' }}>
+        {/* crescent: offset dark circle that bites into the moon */}
+        <View style={{ position: 'absolute', width: 34, height: 34, borderRadius: 17, backgroundColor: '#050E1E', top: -4, left: 12 }} />
+      </View>
+    </View>
+  );
+}
+
 export default function CityScreen() {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const { t } = useLanguage();
   const { habits, completedCount, setOnTokenEarned } = useHabits();
   const {
@@ -883,6 +908,14 @@ export default function CityScreen() {
             setViewportSize({ width, height });
           }}
         >
+          <LinearGradient
+            colors={theme === 'dark'
+              ? ['#020609', '#0A1628', '#1A2E4A']
+              : ['#2980B9', '#87CEEB', '#C8E8F5']}
+            locations={[0, 0.5, 1]}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+          <SkyLight theme={theme} />
           <Animated.View
             ref={gridContainerRef as React.RefObject<View>}
             style={[
@@ -1018,7 +1051,7 @@ function createStyles(colors: ThemeColors) {
     headerTop: {
       flexDirection: "row" as const,
       justifyContent: "space-between" as const,
-      alignItems: "flex-start" as const,
+      alignItems: "center" as const,
     },
     title: {
       fontSize: 28,
@@ -1056,7 +1089,6 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       alignItems: "center" as const,
       justifyContent: "center" as const,
-      backgroundColor: colors.skyBackground,
       overflow: "hidden" as const,
     },
     gridContainer: {

@@ -13,12 +13,15 @@ export default function DrawerLayout() {
         initialRouteName="habits"
         screenOptions={{
           headerShown: true,
-          drawerStyle: { backgroundColor: colors.drawerBackground, width: '65%' },
+          drawerStyle: { backgroundColor: colors.drawerBackground, width: '40%' },
           headerStyle: { backgroundColor: colors.headerBackground },
           headerTintColor: colors.text,
           headerTitle: () => null,
           drawerActiveTintColor: colors.drawerActiveText,
           drawerInactiveTintColor: colors.drawerInactiveText,
+          drawerActiveBackgroundColor: colors.accentLight,
+          drawerItemStyle: { borderRadius: 8, marginHorizontal: 8 },
+          drawerLabelStyle: { fontWeight: '500', fontSize: 15 },
           swipeEnabled: false,
         }}
       >

@@ -181,14 +181,22 @@ function calcCompletionRate(
   if (timesPerWeek) {
     const createdDate = new Date(habit.created_at);
     createdDate.setHours(0, 0, 0, 0);
-    const effectiveStart = startDate > createdDate ? startDate : createdDate;
-    let monday = getSunday(effectiveStart);
-    const endMonday = getSunday(endDate);
+    let sunday = getSunday(startDate);
     let completed = 0, scheduled = 0;
-    while (monday <= endMonday) {
-      scheduled++;
-      if (getWeekCompletionCount(habit, entriesByDate, monday, createdDate, endDate) >= timesPerWeek) completed++;
-      const next = new Date(monday); next.setDate(monday.getDate() + 7); monday = next;
+    while (sunday <= endDate) {
+      let daysInWeek = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(sunday);
+        d.setDate(sunday.getDate() + i);
+        if (d < createdDate || d < startDate || d > endDate) continue;
+        daysInWeek++;
+      }
+      if (daysInWeek > 0) {
+        scheduled += daysInWeek;
+        const weekCount = getWeekCompletionCount(habit, entriesByDate, sunday, createdDate, endDate);
+        completed += weekCount >= timesPerWeek ? daysInWeek : weekCount;
+      }
+      const next = new Date(sunday); next.setDate(sunday.getDate() + 7); sunday = next;
     }
     const rate = scheduled > 0 ? Math.round((completed / scheduled) * 100) : 0;
     return { completed, scheduled, rate };
@@ -641,11 +649,22 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
   createdDate.setHours(0, 0, 0, 0);
   let monthCompleted = 0;
   if (timesPerWeek) {
-    let monday = getSunday(new Date(year, month, 1));
+    const monthStart = new Date(year, month, 1);
     const monthEnd = new Date(year, month + 1, 0);
-    while (monday <= monthEnd) {
-      if (getWeekCompletionCount(habit, entriesByDate, monday, createdDate, today) >= timesPerWeek) monthCompleted++;
-      const next = new Date(monday); next.setDate(monday.getDate() + 7); monday = next;
+    let sunday = getSunday(monthStart);
+    while (sunday <= monthEnd) {
+      let daysInWeek = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(sunday);
+        d.setDate(sunday.getDate() + i);
+        if (d < createdDate || d < monthStart || d > today || d > monthEnd) continue;
+        daysInWeek++;
+      }
+      if (daysInWeek > 0) {
+        const weekCount = getWeekCompletionCount(habit, entriesByDate, sunday, createdDate, today);
+        monthCompleted += weekCount >= timesPerWeek ? daysInWeek : weekCount;
+      }
+      const next = new Date(sunday); next.setDate(sunday.getDate() + 7); sunday = next;
     }
   } else {
     for (let d = 1; d <= daysInMonth; d++) {
@@ -658,10 +677,21 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
   }
   let yearCompleted = 0;
   if (timesPerWeek) {
-    let monday = getSunday(new Date(year, 0, 1));
-    while (monday <= today) {
-      if (getWeekCompletionCount(habit, entriesByDate, monday, createdDate, today) >= timesPerWeek) yearCompleted++;
-      const next = new Date(monday); next.setDate(monday.getDate() + 7); monday = next;
+    const yearStart = new Date(year, 0, 1);
+    let sunday = getSunday(yearStart);
+    while (sunday <= today) {
+      let daysInWeek = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(sunday);
+        d.setDate(sunday.getDate() + i);
+        if (d < createdDate || d < yearStart || d > today) continue;
+        daysInWeek++;
+      }
+      if (daysInWeek > 0) {
+        const weekCount = getWeekCompletionCount(habit, entriesByDate, sunday, createdDate, today);
+        yearCompleted += weekCount >= timesPerWeek ? daysInWeek : weekCount;
+      }
+      const next = new Date(sunday); next.setDate(sunday.getDate() + 7); sunday = next;
     }
   } else {
     for (let m = 0; m < 12; m++) {

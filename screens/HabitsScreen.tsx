@@ -667,22 +667,22 @@ export default function HabitsScreen() {
     const value = parseInt(progressValue) || 0;
     await updateEntryValue(selectedHabit.id, value);
     setProgressModalVisible(false);
-    setSelectedHabit(null);
     setProgressValue("");
+    setTimeout(() => setSelectedHabit(null), 300);
   };
 
   const handleProgressCancel = () => {
     setProgressModalVisible(false);
-    setSelectedHabit(null);
     setProgressValue("");
+    setTimeout(() => setSelectedHabit(null), 300);
   };
 
   const handleProgressReset = async () => {
     if (!selectedHabit) return;
     await updateEntryValue(selectedHabit.id, 0);
     setProgressModalVisible(false);
-    setSelectedHabit(null);
     setProgressValue("");
+    setTimeout(() => setSelectedHabit(null), 300);
   };
 
   const handleOpenOptions = (habit: Habit) => {

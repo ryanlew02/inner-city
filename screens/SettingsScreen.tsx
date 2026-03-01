@@ -1,11 +1,11 @@
 import Constants from "expo-constants";
+import * as StoreReview from "expo-store-review";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Linking,
   Modal,
-  Platform,
   ScrollView,
   Share,
   Switch,
@@ -92,18 +92,22 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleRate = () => {
-    const storeUrl = Platform.select({
-      ios: "https://innercity.carrd.co/",
-      android: "https://innercity.carrd.co/",
-    });
-    if (storeUrl) Linking.openURL(storeUrl);
+  const APP_STORE_URL = "https://apps.apple.com/us/app/inner-city/id6759073471";
+
+  const handleRate = async () => {
+    const available = await StoreReview.isAvailableAsync();
+    if (available) {
+      await StoreReview.requestReview();
+    } else {
+      Linking.openURL(`${APP_STORE_URL}?action=write-review`);
+    }
   };
 
   const handleShare = async () => {
     try {
       await Share.share({
         message: t('settings.shareMessage'),
+        url: APP_STORE_URL,
       });
     } catch (_) {}
   };
