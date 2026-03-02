@@ -650,6 +650,7 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
   const createdDate = new Date(habit.created_at);
   createdDate.setHours(0, 0, 0, 0);
   let monthCompleted = 0;
+  let monthScheduled = 0;
   if (timesPerWeek) {
     const monthStart = new Date(year, month, 1);
     const monthEnd = new Date(year, month + 1, 0);
@@ -672,9 +673,13 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
     for (let d = 1; d <= daysInMonth; d++) {
       const cellDate = new Date(year, month, d);
       if (cellDate > today) break;
-      const entry = entriesByDate.get(formatDateStr(cellDate));
+      if (cellDate < createdDate) continue;
       const scheduled = isScheduledForDate(scheduleData, cellDate);
-      if (scheduled && isCompletedForDate(habit, entry, cellDate)) monthCompleted++;
+      if (scheduled) {
+        monthScheduled++;
+        const entry = entriesByDate.get(formatDateStr(cellDate));
+        if (isCompletedForDate(habit, entry, cellDate)) monthCompleted++;
+      }
     }
   }
   let yearCompleted = 0;
@@ -723,7 +728,7 @@ function OverviewHabitCard({ habit, entriesByDate, todayStr, colors }: { habit: 
       <View style={styles.statsRow}>
         <StatBox label={tCard("stats.currentStreak")} value={String(streaks.current)} colors={colors} />
         <StatBox label={tCard("stats.bestStreak")} value={String(streaks.best)} colors={colors} />
-        <StatBox label={tCard("stats.thisMonth")} value={timesPerWeek ? String(monthCompleted) : `${monthCompleted}/${daysInMonth}`} colors={colors} />
+        <StatBox label={tCard("stats.thisMonth")} value={timesPerWeek ? String(monthCompleted) : `${monthCompleted}/${monthScheduled}`} colors={colors} />
         <StatBox label={tCard("stats.thisYear")} value={String(yearCompleted)} colors={colors} />
       </View>
     </View>
