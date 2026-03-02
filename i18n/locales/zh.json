@@ -30,6 +30,9 @@
     "noHabits": "还没有习惯",
     "noHabitsHint": "点击 + 按钮创建你的第一个习惯",
     "allCompleted": "所有习惯都完成了！做得好！",
+    "celebrationTitle": "全部完成！",
+    "celebrationBody": "今天所有习惯都完成了。继续保持！",
+    "celebrationDismiss": "出发！",
     "notScheduled": "今天未安排",
     "notCreatedYet": "此习惯尚未创建",
     "limitExceeded": "超过限制",
@@ -58,7 +61,8 @@
     "save": "保存",
     "goToToday": "回到今天",
     "tapToPickMonth": "点击选择月份",
-    "tapToPickDay": "点击选择日期"
+    "tapToPickDay": "点击选择日期",
+    "dontShowAgain": "不再显示"
   },
   "stats": {
     "title": "统计",

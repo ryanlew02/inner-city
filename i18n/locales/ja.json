@@ -30,6 +30,9 @@
     "noHabits": "まだ習慣がありません",
     "noHabitsHint": "+ボタンをタップして最初の習慣を作成",
     "allCompleted": "すべての習慣が完了しました！素晴らしい！",
+    "celebrationTitle": "完了！",
+    "celebrationBody": "今日のすべての習慣を達成しました。この調子で！",
+    "celebrationDismiss": "さあ行こう！",
     "notScheduled": "今日はスケジュールされていません",
     "notCreatedYet": "この習慣はまだ作成されていませんでした",
     "limitExceeded": "上限を超えました",
@@ -58,7 +61,8 @@
     "save": "保存",
     "goToToday": "今日に移動",
     "tapToPickMonth": "タップして月を選択",
-    "tapToPickDay": "タップして日を選択"
+    "tapToPickDay": "タップして日を選択",
+    "dontShowAgain": "今後は表示しない"
   },
   "stats": {
     "title": "統計",

@@ -56,6 +56,7 @@ export type ThemeColors = {
   statHighlight: string;
   cellDefault: string;
   cellUnscheduled: string;
+  cellMissed: string;
 };
 
 export const lightColors: ThemeColors = {
@@ -108,6 +109,7 @@ export const lightColors: ThemeColors = {
   statHighlight: '#3B82F6',
   cellDefault: '#D1D5DB',
   cellUnscheduled: '#F3F4F6',
+  cellMissed: '#FECDD3',
 };
 
 export const darkColors: ThemeColors = {
@@ -160,4 +162,5 @@ export const darkColors: ThemeColors = {
   statHighlight: '#60A5FA',
   cellDefault: '#3A3A4A',
   cellUnscheduled: '#1E1E2A',
+  cellMissed: '#4A1A1A',
 };

@@ -30,6 +30,9 @@
     "noHabits": "아직 습관이 없습니다",
     "noHabitsHint": "+ 버튼을 탭하여 첫 번째 습관을 만드세요",
     "allCompleted": "모든 습관이 완료되었습니다! 잘하셨습니다!",
+    "celebrationTitle": "완료!",
+    "celebrationBody": "오늘 모든 습관을 달성했습니다. 계속 해봐요!",
+    "celebrationDismiss": "가자!",
     "notScheduled": "오늘 예정되지 않음",
     "notCreatedYet": "이 습관은 아직 생성되지 않았습니다",
     "limitExceeded": "제한 초과",
@@ -58,7 +61,8 @@
     "save": "저장",
     "goToToday": "오늘로 이동",
     "tapToPickMonth": "탭하여 월 선택",
-    "tapToPickDay": "탭하여 일 선택"
+    "tapToPickDay": "탭하여 일 선택",
+    "dontShowAgain": "다시 표시 안 함"
   },
   "stats": {
     "title": "통계",

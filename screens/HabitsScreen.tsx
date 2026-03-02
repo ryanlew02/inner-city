@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
@@ -19,6 +20,7 @@ import { useHabits } from "../context/HabitsContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { getEntriesForDateRange } from "../services/database/entryService";
+import { getDatabase } from "../services/database/db";
 import { Habit, parseScheduleJson } from "../types/habit";
 
 function getISOMonday(dateStr: string): Date {
@@ -574,6 +576,7 @@ export default function HabitsScreen() {
     habits,
     toggleHabit,
     completedCount,
+    scheduledCount,
     isHabitCompleted,
     isHabitScheduledForToday,
     isHabitScheduledForDate,
@@ -606,6 +609,55 @@ export default function HabitsScreen() {
 
   // Calendar modal state
   const [calendarVisible, setCalendarVisible] = useState(false);
+
+  // Celebration modal state
+  const [celebrationVisible, setCelebrationVisible] = useState(false);
+  const [dontShowCelebration, setDontShowCelebration] = useState(false);
+  const celebrationShownForDate = useRef<string>('');
+  const celebrationHiddenPermanently = useRef(false);
+  const celebrationSettingsLoaded = useRef(false);
+  const celebrationScale = useRef(new Animated.Value(0.7)).current;
+  const celebrationOpacity = useRef(new Animated.Value(0)).current;
+  const [celebrationSettingsReady, setCelebrationSettingsReady] = useState(false);
+
+  useEffect(() => {
+    getDatabase().then(async db => {
+      const [hideRow, shownRow] = await Promise.all([
+        db.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', ['hide_celebration']),
+        db.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', ['celebration_shown_date']),
+      ]);
+      if (hideRow?.value === '1') celebrationHiddenPermanently.current = true;
+      if (shownRow?.value) celebrationShownForDate.current = shownRow.value;
+      celebrationSettingsLoaded.current = true;
+      setCelebrationSettingsReady(true);
+    }).catch(() => {
+      celebrationSettingsLoaded.current = true;
+      setCelebrationSettingsReady(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!celebrationSettingsReady) return;
+    if (isViewingToday && scheduledCount > 0 && completedCount === scheduledCount && celebrationShownForDate.current !== currentDate && !celebrationHiddenPermanently.current) {
+      celebrationShownForDate.current = currentDate;
+      getDatabase().then(db =>
+        db.runAsync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', ['celebration_shown_date', currentDate])
+      ).catch(() => {});
+      setCelebrationVisible(true);
+    }
+  }, [completedCount, scheduledCount, isViewingToday, currentDate, celebrationSettingsReady]);
+
+  useEffect(() => {
+    if (celebrationVisible) {
+      setDontShowCelebration(false);
+      celebrationScale.setValue(0.7);
+      celebrationOpacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(celebrationScale, { toValue: 1, useNativeDriver: true, tension: 120, friction: 8 }),
+        Animated.timing(celebrationOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [celebrationVisible]);
 
   // Weekly completions for times_per_week habits
   const [weeklyCompletions, setWeeklyCompletions] = useState<Map<string, number>>(new Map());
@@ -808,7 +860,7 @@ export default function HabitsScreen() {
           <View style={styles.headerTitles}>
             <Text style={styles.title}>{t('habits.title')}</Text>
             <Text style={styles.subtitle}>
-              {t('habits.completedOf', { completed: completedCount, total: habits.length })}
+              {t('habits.completedOf', { completed: completedCount, total: scheduledCount })}
             </Text>
           </View>
           {habits.length > 1 && (
@@ -941,11 +993,42 @@ export default function HabitsScreen() {
         )}
       </ScrollView>
 
-      {completedCount === habits.length && habits.length > 0 && (
-        <View style={styles.completedBanner}>
-          <Text style={styles.completedText}>{t('habits.allCompleted')}</Text>
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={celebrationVisible}
+        onRequestClose={() => setCelebrationVisible(false)}
+      >
+        <View style={styles.celebrationOverlay}>
+          <Animated.View style={[styles.celebrationCard, { transform: [{ scale: celebrationScale }], opacity: celebrationOpacity }]}>
+            <Text style={styles.celebrationEmoji}>🏆</Text>
+            <Text style={styles.celebrationTitle}>{t('habits.celebrationTitle')}</Text>
+            <Text style={styles.celebrationBody}>{t('habits.celebrationBody')}</Text>
+            <View style={styles.celebrationStarsRow}>
+              <Text style={styles.celebrationStar}>⭐</Text>
+              <Text style={styles.celebrationStar}>⭐</Text>
+              <Text style={styles.celebrationStar}>⭐</Text>
+            </View>
+            <TouchableOpacity style={styles.celebrationCheckRow} onPress={() => setDontShowCelebration(v => !v)} activeOpacity={0.7}>
+              <View style={[styles.celebrationCheckbox, dontShowCelebration && styles.celebrationCheckboxChecked]}>
+                {dontShowCelebration && <Text style={styles.celebrationCheckMark}>✓</Text>}
+              </View>
+              <Text style={styles.celebrationCheckLabel}>{t('habits.dontShowAgain')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.celebrationButton} onPress={async () => {
+              if (dontShowCelebration) {
+                celebrationHiddenPermanently.current = true;
+                const db = await getDatabase();
+                await db.runAsync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', ['hide_celebration', '1']);
+              }
+              setDontShowCelebration(false);
+              setCelebrationVisible(false);
+            }} activeOpacity={0.8}>
+              <Text style={styles.celebrationButtonText}>{t('habits.celebrationDismiss')}</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
-      )}
+      </Modal>
 
       <TouchableOpacity
         style={styles.infoButton}
@@ -1590,19 +1673,91 @@ function createStyles(colors: ThemeColors) {
       flexShrink: 0,
       alignSelf: 'center',
     },
-    completedBanner: {
-      backgroundColor: colors.success,
-      paddingVertical: 16,
-      paddingHorizontal: 20,
-      marginHorizontal: 20,
-      marginBottom: 80,
-      borderRadius: 14,
-      alignItems: "center" as const,
+    celebrationOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.7)',
+      justifyContent: 'center' as const,
+      alignItems: 'center' as const,
+      paddingHorizontal: 32,
     },
-    completedText: {
-      color: colors.textInverse,
-      fontSize: 16,
-      fontWeight: "600" as const,
+    celebrationCard: {
+      backgroundColor: colors.card,
+      borderRadius: 28,
+      paddingVertical: 40,
+      paddingHorizontal: 32,
+      alignItems: 'center' as const,
+      width: '100%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.35,
+      shadowRadius: 20,
+      elevation: 16,
+    },
+    celebrationEmoji: {
+      fontSize: 72,
+      marginBottom: 16,
+    },
+    celebrationTitle: {
+      fontSize: 28,
+      fontWeight: '800' as const,
+      color: colors.text,
+      textAlign: 'center' as const,
+      marginBottom: 10,
+    },
+    celebrationBody: {
+      fontSize: 15,
+      color: colors.textSecondary,
+      textAlign: 'center' as const,
+      lineHeight: 22,
+      marginBottom: 20,
+    },
+    celebrationStarsRow: {
+      flexDirection: 'row' as const,
+      marginBottom: 28,
+    },
+    celebrationStar: {
+      fontSize: 26,
+      marginHorizontal: 6,
+    },
+    celebrationCheckRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      marginBottom: 20,
+    },
+    celebrationCheckbox: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: colors.border,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      marginRight: 10,
+    },
+    celebrationCheckboxChecked: {
+      backgroundColor: colors.success,
+      borderColor: colors.success,
+    },
+    celebrationCheckMark: {
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: '700' as const,
+    },
+    celebrationCheckLabel: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    celebrationButton: {
+      backgroundColor: colors.success,
+      paddingVertical: 14,
+      paddingHorizontal: 48,
+      borderRadius: 14,
+    },
+    celebrationButtonText: {
+      color: '#fff',
+      fontSize: 17,
+      fontWeight: '700' as const,
+      letterSpacing: 0.3,
     },
     infoButton: {
       position: "absolute" as const,

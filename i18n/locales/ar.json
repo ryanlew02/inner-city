@@ -30,6 +30,9 @@
     "noHabits": "لا توجد عادات بعد",
     "noHabitsHint": "اضغط على زر + لإنشاء عادتك الأولى",
     "allCompleted": "اكتملت جميع العادات! عمل رائع!",
+    "celebrationTitle": "تم الإنجاز!",
+    "celebrationBody": "اكتملت جميع العادات اليوم. استمر هكذا!",
+    "celebrationDismiss": "هيا نذهب!",
     "notScheduled": "غير مجدولة لهذا اليوم",
     "notCreatedYet": "لم تكن هذه العادة قد أُنشئت بعد",
     "limitExceeded": "تم تجاوز الحد",
@@ -58,7 +61,8 @@
     "save": "حفظ",
     "goToToday": "الذهاب إلى اليوم",
     "tapToPickMonth": "اضغط لاختيار الشهر",
-    "tapToPickDay": "اضغط لاختيار اليوم"
+    "tapToPickDay": "اضغط لاختيار اليوم",
+    "dontShowAgain": "لا تُظهر مجدداً"
   },
   "stats": {
     "title": "الإحصائيات",

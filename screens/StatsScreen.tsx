@@ -555,11 +555,12 @@ function MonthlyGrid({ habit, entriesByDate, todayStr, year, month, colors }: { 
             const completed = timesPerWeek
               ? (!isFuture && (isCompletedForDate(habit, entry, cellDate) || completedWeekSet.has(formatDateStr(getSunday(cellDate)))))
               : (scheduled && isCompletedForDate(habit, entry, cellDate));
-            let bgColor = colors.cellDefault;
+            let bgColor = colors.cellUnscheduled;
             let opacity = 1;
-            if (isFuture) { bgColor = colors.cellDefault; opacity = 0.25; }
+            if (isFuture) { opacity = 0.4; }
             else if (completed) { bgColor = habit.color; }
-            else if (!timesPerWeek && !scheduled) { bgColor = colors.cellUnscheduled; }
+            else if (!timesPerWeek && !scheduled) { /* stays cellUnscheduled */ }
+            else { bgColor = colors.cellMissed; }
             return (
               <View key={`day-${day}`} style={[{ width: cellSize, height: cellSize, margin: 2, borderRadius: 6, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: bgColor, opacity }, isToday && styles.todayCell]}>
                 <Text style={[styles.monthCalDayText, isToday && styles.monthCalTodayText]}>{day}</Text>
@@ -622,11 +623,12 @@ function YearlyGrid({ habit, entriesByDate, todayStr, year, colors }: { habit: H
             const completed = timesPerWeek
               ? (!isFuture && (isCompletedForDate(habit, entry, cell!) || completedWeekSet.has(formatDateStr(getSunday(cell!)))))
               : (scheduled && isCompletedForDate(habit, entry, cell!));
-            let bgColor = colors.cellDefault;
+            let bgColor = colors.cellUnscheduled;
             let opacity = 1;
-            if (isFuture) { opacity = 0.25; }
+            if (isFuture) { opacity = 0.4; }
             else if (completed) { bgColor = habit.color; }
-            else if (!timesPerWeek && !scheduled) { opacity = 0.35; }
+            else if (!timesPerWeek && !scheduled) { /* stays cellUnscheduled */ }
+            else { bgColor = colors.cellMissed; }
             return <View key={wi} style={[styles.yearCell, { width: cellSize, height: cellSize, backgroundColor: bgColor, opacity }, isToday && styles.todayYearCell]} />;
           })}
         </View>
@@ -1071,12 +1073,12 @@ export default function StatsScreen() {
                         const completed = scheduled && !isFuture && isCompletedForDate(habit, entry, d);
 
                         let bgColor: string;
-                        if (!scheduled) {
+                        if (!scheduled || isFuture) {
                           bgColor = colors.cellUnscheduled;
-                        } else if (!isFuture && (completed || weekGoalMet)) {
+                        } else if (completed || weekGoalMet) {
                           bgColor = habit.color;
                         } else {
-                          bgColor = colors.cellDefault;
+                          bgColor = colors.cellMissed;
                         }
 
                         return (

@@ -30,6 +30,9 @@
     "noHabits": "Aucune habitude encore",
     "noHabitsHint": "Appuyez sur le bouton + pour créer votre première habitude",
     "allCompleted": "Toutes les habitudes complétées ! Excellent travail !",
+    "celebrationTitle": "Tout fait !",
+    "celebrationBody": "Toutes les habitudes complétées. Continue comme ça !",
+    "celebrationDismiss": "Allons-y !",
     "notScheduled": "Pas prévu pour aujourd'hui",
     "notCreatedYet": "Cette habitude n'existait pas encore",
     "limitExceeded": "limite dépassée",
@@ -58,7 +61,8 @@
     "save": "Enregistrer",
     "goToToday": "Aller à Aujourd'hui",
     "tapToPickMonth": "Appuyez pour choisir un mois",
-    "tapToPickDay": "Appuyez pour choisir un jour"
+    "tapToPickDay": "Appuyez pour choisir un jour",
+    "dontShowAgain": "Ne plus afficher"
   },
   "stats": {
     "title": "Statistiques",

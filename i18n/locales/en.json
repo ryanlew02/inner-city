@@ -30,6 +30,9 @@
     "noHabits": "No habits yet",
     "noHabitsHint": "Tap the + button to create your first habit",
     "allCompleted": "All habits completed! Great job!",
+    "celebrationTitle": "All Done!",
+    "celebrationBody": "Every habit completed today.\nYou're on a roll!",
+    "celebrationDismiss": "Let's go!",
     "notScheduled": "Not scheduled for today",
     "notCreatedYet": "This habit was not created yet",
     "limitExceeded": "limit exceeded",
@@ -41,7 +44,7 @@
     "tipSwipeFurther": "For progress habits, swipe further for more. Flick to fill completely",
     "tipLongPress": "Long press a habit for options (reset, edit, delete)",
     "quitHabitsTitle": "Quit Habits",
-    "tipQuitStart": "Quit habits start completed each day \u2014 you're succeeding by not doing it",
+    "tipQuitStart": "Quit habits start completed each day — you're succeeding by not doing it",
     "tipQuitTap": "Tap a quit habit to mark that you slipped up. Tap again to undo",
     "gotIt": "Got it",
     "resetProgress": "Reset Progress For Today",
@@ -58,7 +61,8 @@
     "save": "Save",
     "goToToday": "Go to Today",
     "tapToPickMonth": "Tap to pick month",
-    "tapToPickDay": "Tap to pick day"
+    "tapToPickDay": "Tap to pick day",
+    "dontShowAgain": "Don't show again"
   },
   "stats": {
     "title": "Stats",

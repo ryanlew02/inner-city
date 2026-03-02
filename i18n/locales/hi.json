@@ -30,6 +30,9 @@
     "noHabits": "अभी तक कोई आदत नहीं",
     "noHabitsHint": "अपनी पहली आदत बनाने के लिए + बटन पर टैप करें",
     "allCompleted": "सभी आदतें पूरी हो गईं! बहुत बढ़िया!",
+    "celebrationTitle": "सब हो गया!",
+    "celebrationBody": "आज सभी आदतें पूरी हो गईं। बढ़ते रहो!",
+    "celebrationDismiss": "चलते हैं!",
     "notScheduled": "आज के लिए निर्धारित नहीं",
     "notCreatedYet": "यह आदत अभी तक बनाई नहीं गई थी",
     "limitExceeded": "सीमा पार हो गई",
@@ -58,7 +61,8 @@
     "save": "सहेजें",
     "goToToday": "आज पर जाएं",
     "tapToPickMonth": "महीना चुनने के लिए टैप करें",
-    "tapToPickDay": "दिन चुनने के लिए टैप करें"
+    "tapToPickDay": "दिन चुनने के लिए टैप करें",
+    "dontShowAgain": "दोबारा मत दिखाओ"
   },
   "stats": {
     "title": "आंकड़े",

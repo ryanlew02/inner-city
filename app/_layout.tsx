@@ -51,7 +51,9 @@ function AppContent() {
   if (habitsLoading || buildingLoading || (!fontsLoaded && !fontError)) {
     return (
       <View style={{ flex: 1, backgroundColor: '#121218', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator color="#ffffff" />
+        <Text style={{ color: '#FFFFFF', fontSize: 42, fontWeight: '800', letterSpacing: 2, marginBottom: 6 }}>INNER</Text>
+        <Text style={{ color: '#60A5FA', fontSize: 13, fontWeight: '600', letterSpacing: 5, marginBottom: 40 }}>CITY</Text>
+        <ActivityIndicator color="#3B82F6" size="large" />
       </View>
     );
   }

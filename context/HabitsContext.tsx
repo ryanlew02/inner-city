@@ -22,6 +22,7 @@ type HabitsContextType = {
   reorderHabits: (fromIndex: number, toIndex: number) => void;
   resetHabitData: () => Promise<void>;
   completedCount: number;
+  scheduledCount: number;
   isHabitCompleted: (habitId: string) => boolean;
   isHabitScheduledForToday: (habitId: string) => boolean;
   isHabitScheduledForDate: (habitId: string, date: string) => boolean;
@@ -529,7 +530,16 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     return isScheduledForDate(scheduleData, date);
   };
 
-  const completedCount = habits.filter(h => isHabitCompleted(h.id)).length;
+  const scheduledHabitsForView = habits.filter(h => {
+    const createdDate = new Date(h.created_at);
+    createdDate.setHours(0, 0, 0, 0);
+    const viewDate = new Date(viewingDate + 'T00:00:00');
+    if (viewDate < createdDate) return false;
+    const scheduleData = parseScheduleJson(h.schedule_json);
+    return isScheduledForDate(scheduleData, viewDate);
+  });
+  const scheduledCount = scheduledHabitsForView.length;
+  const completedCount = scheduledHabitsForView.filter(h => isHabitCompleted(h.id)).length;
 
   return (
     <HabitsContext.Provider value={{
@@ -545,6 +555,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       reorderHabits,
       resetHabitData,
       completedCount,
+      scheduledCount,
       isHabitCompleted,
       isHabitScheduledForToday,
       isHabitScheduledForDate: isHabitScheduledForDateFn,

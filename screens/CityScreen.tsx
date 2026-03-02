@@ -60,11 +60,15 @@ function getBuildingSpriteStyle(building: PlacedBuilding): { width: number; heig
   }
   // Houses are smaller buildings - scale them down
   if (building.building_type === "house") {
-    const houseSize = BUILDING_SPRITE_SIZE.width - 8;
+    let houseSize = BUILDING_SPRITE_SIZE.width - 8;
     // Per-tier pixel adjustments (SE=top+left, NE=top-left, NW=top-left-, etc.)
     let shiftTop = 0;
     let shiftLeft = 0;
-    if (building.tier === 2) {
+    if (building.tier === 1) {
+      houseSize = BUILDING_SPRITE_SIZE.width - 18; // smaller starter home
+      shiftTop = 9;
+      shiftLeft = 5;
+    } else if (building.tier === 2) {
       // NE 1px + NW 1px = top -2, left 0
       shiftTop = -2;
       shiftLeft = 0;
